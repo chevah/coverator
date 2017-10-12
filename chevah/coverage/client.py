@@ -2,13 +2,13 @@ from __future__ import unicode_literals
 
 import requests
 import argparse
-import os
 import sys
 
 
 def upload_file(filepath, url, slave, commit, branch, pr):
     files = {'file': open(filepath)}
-    response = requests.post(url,
+    requests.post(
+        url,
         data=dict(pr=pr, commit=commit, slave=slave, branch=branch),
         files=files)
 
@@ -19,27 +19,33 @@ def main(*argv, **kwargs):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Upload reports to a Chevah Coverage server")
 
-    parser.add_argument('url',
+    parser.add_argument(
+        'url',
         default=None,
         help='URL to upload to')
 
-    parser.add_argument('coverage_file',
+    parser.add_argument(
+        'coverage_file',
         default=None,
         help='Coverage.py data file')
 
-    parser.add_argument('--commit',
+    parser.add_argument(
+        '--commit',
         default=None,
         help='Commit sha, set automatically')
 
-    parser.add_argument('--slave',
+    parser.add_argument(
+        '--slave',
         default=None,
         help='Specify a buildslave')
 
-    parser.add_argument('--pr',
+    parser.add_argument(
+        '--pr',
         default=None,
         help='Specify a custom pr number')
 
-    parser.add_argument('--branch',
+    parser.add_argument(
+        '--branch',
         default=None,
         help='Specify a custom branch name')
 
@@ -48,7 +54,8 @@ def main(*argv, **kwargs):
     else:
         args = parser.parse_args()
 
-    upload_file(args.coverage_file, args.url, args.slave,
+    upload_file(
+        args.coverage_file, args.url, args.slave,
         args.commit, args.branch, args.pr)
 
 

@@ -30,7 +30,6 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
 
         if 'file' in form:
             coverage_file = form['file']
-            filename = coverage_file.filename
             data = coverage_file.file.read()
             commit = form.getvalue('commit')
             slave = form.getvalue('slave')
@@ -61,7 +60,7 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                 c.load()
                 percentage = c.html_report(directory=path)
 
-        response = '{result: %f}' % percentage
+        response = '{result: %.2f}' % percentage
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header("Content-length", len(response))
@@ -98,14 +97,17 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
         return path
 
 
-if not os.path.exists(ChevahCoverageHandler.PATH):
-    os.mkdir(ChevahCoverageHandler.PATH)
+def main():
+    if not os.path.exists(ChevahCoverageHandler.PATH):
+        os.mkdir(ChevahCoverageHandler.PATH)
 
-for dir_name in ('commit', 'branch', 'pr'):
-    if not os.path.exists(os.path.join(ChevahCoverageHandler.PATH, dir_name)):
-        os.mkdir(os.path.join(ChevahCoverageHandler.PATH, dir_name))
+    for dir_name in ('commit', 'branch', 'pr'):
+        if not os.path.exists(
+                os.path.join(ChevahCoverageHandler.PATH, dir_name)):
+            os.mkdir(os.path.join(ChevahCoverageHandler.PATH, dir_name))
 
-server = HTTPServer(('', 8080), ChevahCoverageHandler)
+    server = HTTPServer(('', 8080), ChevahCoverageHandler)
+    server.serve_forever()
 
 if __name__ == '__main__':
-    server.serve_forever()
+    main()

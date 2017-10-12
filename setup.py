@@ -35,7 +35,7 @@ distribution = setup(
     maintainer_email='adi.roiban@chevah.com',
     license='MIT',
     platforms='any',
-    description="codecov.io like tool for aggregating and publishing coverage reports."
+    description="codecov.io like tool for aggregating and publishing coverage reports.",
     long_description="",
     url='http://www.chevah.com',
     namespace_packages=['chevah'],
@@ -53,7 +53,7 @@ distribution = setup(
             ],
     },
     test_suite = 'chevah.coverage.tests',
-    cmdclass={
-        'publish': PublishCommand,
-        },
+    # cmdclass={
+    #     'publish': PublishCommand,
+    #     },
     )
