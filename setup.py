@@ -42,6 +42,7 @@ distribution = setup(
     packages=find_packages('.'),
     install_requires=[
         'coverage==4.4.1',
+        'requests==2.18.4',
         ],
     extras_require = {
         'dev': [
