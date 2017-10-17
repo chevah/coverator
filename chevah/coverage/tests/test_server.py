@@ -240,5 +240,5 @@ class TestChevahCoverageHandler(BaseTestCase):
                 pass
 
         sut = NoRequestChevahCoverageHandler()
-        result = sut.translate_path('/test')
-        self.assertEqual(u'/a/generic/path/test', result)
+        result = sut.translate_path('/test/')
+        self.assertEqual(u'/a/generic/path/test/', result)

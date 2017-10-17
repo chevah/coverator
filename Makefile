@@ -19,3 +19,7 @@ lint:
 
 test: lint
 	@build/bin/python setup.py test
+
+
+test_with_coverage: lint
+	@build/bin/nosetests --with-coverage --cover-package=chevah --cover-tests

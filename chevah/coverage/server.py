@@ -34,7 +34,7 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
         percentage = 0.0
 
         if 'file' in form:
-            if not os.path.exists(self.PATH):
+            if not os.path.exists(self.PATH):  # pragma: no cover
                 os.mkdir(self.PATH)
 
             for dir_name in ('commit', 'branch', 'pr'):
@@ -122,7 +122,7 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
         return path
 
 
-def main(*argv):
+def main(*argv):  # pragma: no cover
     parser = argparse.ArgumentParser(
         prog='chevah-coverage-server', add_help=True,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -139,5 +139,5 @@ def main(*argv):
     server = HTTPServer(('', 8080), ChevahCoverageHandler)
     server.serve_forever()
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     main(*sys.argv[1:])

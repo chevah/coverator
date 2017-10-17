@@ -43,6 +43,7 @@ distribution = setup(
     install_requires=[
         'coverage==4.4.1',
         'requests==2.18.4',
+        'diff_cover==0.9.12',
         ],
     extras_require = {
         'dev': [
@@ -53,7 +54,7 @@ distribution = setup(
             ],
     },
     test_suite = 'chevah.coverage.tests',
-    # cmdclass={
-    #     'publish': PublishCommand,
-    #     },
+    cmdclass={
+         'publish': PublishCommand,
+         },
     )
