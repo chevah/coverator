@@ -12,6 +12,7 @@ import urllib
 
 class ChevahCoverageHandler(SimpleHTTPRequestHandler):
     PATH = '/tmp/chevahcoverages'
+    MINIMUM_NUMBER_OF_COVERAGE_FILES = 5
 
     def do_POST(self):
         """
@@ -60,8 +61,8 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                     os.symlink(path, link_path)
 
             coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
-            # The minimum number of files should be configurable
-            if len(coverage_files) > 5:
+
+            if len(coverage_files) > self.MINIMUM_NUMBER_OF_COVERAGE_FILES:
                 c = coverage.Coverage(data_file=os.path.join(path, 'coverage'))
                 c.combine(data_paths=[path], strict=True)
                 c.load()
