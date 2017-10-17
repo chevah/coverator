@@ -23,7 +23,6 @@ class TestChevahCoverageHandler(BaseTestCase):
         Create a temp dir for testing uploads.
         """
         BaseTestCase.setUp(self)
-        self.cwd = os.getcwd()
         basetempdir = tempfile.gettempdir()
         self.tempdir = tempfile.mkdtemp(dir=basetempdir)
         self.request_handler.PATH = self.tempdir

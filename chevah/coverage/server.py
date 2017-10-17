@@ -3,13 +3,15 @@ from BaseHTTPServer import HTTPServer
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 
 import argparse
+import cgi
 import coverage
 import glob
-import cgi
 import os
 import posixpath
-import urllib
+import shutil
 import sys
+import tempfile
+import urllib
 
 
 class ChevahCoverageHandler(SimpleHTTPRequestHandler):
@@ -65,9 +67,22 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
 
             if len(coverage_files) > self.MINIMUM_NUMBER_OF_COVERAGE_FILES:
+                # The coverage API will delete the coverage data files when
+                # combining them. We don't want that, so let's copy to a
+                # temporary dir first.
+                tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
+                for coverage_file in coverage_files:
+                    shutil.copy(coverage_file, tempdir)
+
                 c = coverage.Coverage(data_file=os.path.join(path, 'coverage'))
                 c.combine(data_paths=[path], strict=True)
                 c.load()
+
+                for coverage_file in coverage_files:
+                    shutil.copy(
+                        os.path.join(tempdir, os.path.basename(coverage_file)),
+                        os.path.dirname(coverage_file))
+                shutil.rmtree(tempdir)
                 percentage = c.html_report(directory=path)
 
         response = '{result: %.2f}' % percentage
