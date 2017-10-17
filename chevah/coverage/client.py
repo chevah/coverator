@@ -23,27 +23,22 @@ def main(*argv, **kwargs):
         'url',
         default=None,
         help='URL to upload to')
-
     parser.add_argument(
         'coverage_file',
         default=None,
         help='Coverage.py data file')
-
     parser.add_argument(
         '--commit',
         default=None,
-        help='Commit sha, set automatically')
-
+        help='Commit SHA')
     parser.add_argument(
         '--slave',
         default=None,
         help='Specify a buildslave')
-
     parser.add_argument(
         '--pr',
         default=None,
         help='Specify a custom pr number')
-
     parser.add_argument(
         '--branch',
         default=None,

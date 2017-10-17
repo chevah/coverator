@@ -29,11 +29,18 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
         percentage = 0.0
 
         if 'file' in form:
+            if not os.path.exists(self.PATH):
+                os.mkdir(self.PATH)
+
+            for dir_name in ('commit', 'branch', 'pr'):
+                if not os.path.exists(
+                        os.path.join(self.PATH, dir_name)):
+                    os.mkdir(os.path.join(self.PATH, dir_name))
+
             coverage_file = form['file']
             data = coverage_file.file.read()
             commit = form.getvalue('commit')
-            slave = form.getvalue('slave')
-
+            slave = form.getvalue('slave', 'manual')
             path = os.path.join(self.PATH, 'commit', commit)
             if not os.path.exists(path):
                 os.mkdir(path)
@@ -98,14 +105,6 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
 
 
 def main():
-    if not os.path.exists(ChevahCoverageHandler.PATH):
-        os.mkdir(ChevahCoverageHandler.PATH)
-
-    for dir_name in ('commit', 'branch', 'pr'):
-        if not os.path.exists(
-                os.path.join(ChevahCoverageHandler.PATH, dir_name)):
-            os.mkdir(os.path.join(ChevahCoverageHandler.PATH, dir_name))
-
     server = HTTPServer(('', 8080), ChevahCoverageHandler)
     server.serve_forever()
 

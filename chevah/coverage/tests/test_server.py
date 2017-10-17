@@ -19,8 +19,11 @@ class TestChevahCoverageHandler(BaseTestCase):
         pass
 
     def setUp(self):
+        """
+        Create a temp dir and file for testing uploads.
+        """
         BaseTestCase.setUp(self)
-        self.data = 'This is some test data'
+        self.data = 'Some test data.'
         self.cwd = os.getcwd()
         basetempdir = tempfile.gettempdir()
         self.tempdir = tempfile.mkdtemp(dir=basetempdir)
@@ -38,19 +41,12 @@ class TestChevahCoverageHandler(BaseTestCase):
         finally:
             BaseTestCase.tearDown(self)
 
-    def check_status_and_reason(self, response, status, data=None):
-        body = response.read()
-        self.assertTrue(response)
-        self.assertEqual(response.status, status)
-        self.assertIsNotNone(response.reason)
-        if data:
-            self.assertEqual(data, body)
-
     def test_post(self):
         request = Request(
             'POST',
             url='http://test/',
-            files={'files': open(os.path.join(self.tempdir, 'test'))},
+            files={'file': open(os.path.join(self.tempdir, 'test'))},
+            data={'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0'},
             )
         prepared_request = request.prepare()
 
@@ -60,10 +56,109 @@ class TestChevahCoverageHandler(BaseTestCase):
             headers=prepared_request.headers,
             body=prepared_request.body)
 
-        self.check_status_and_reason(response, 200, '{result: 0.00}')
-        self.assertEqual(response.getheader('content-length'), '14')
+        self.assertEqual(response.status, 200)
         self.assertEqual(response.getheader('content-type'),
                          'application/json')
+
+        uploaded_path = os.path.join(
+            self.tempdir,
+            'commit',
+            '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+            'coverage.manual',
+            )
+
+        self.assertTrue(os.path.exists(uploaded_path))
+        self.assertEquals('Some test data.', open(uploaded_path).read())
+
+    def test_post_branch(self):
+        request = Request(
+            'POST',
+            url='http://test/',
+            files={'file': open(os.path.join(self.tempdir, 'test'))},
+            data={
+                'branch': 'test-branch',
+                'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+                },
+            )
+        prepared_request = request.prepare()
+
+        response = self.request(
+            '/',
+            method='POST',
+            headers=prepared_request.headers,
+            body=prepared_request.body)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader('content-type'),
+                         'application/json')
+
+        branch_path = os.path.join(self.tempdir, 'branch', 'test-branch')
+        commit_path = os.path.join(
+            self.tempdir,
+            'commit',
+            '0f3adff9d8f6a72c919822b8cde073a9e20505e0')
+
+        self.assertTrue(os.path.islink(branch_path))
+        self.assertEqual(commit_path, os.path.realpath(branch_path))
+
+    def test_post_pr(self):
+        request = Request(
+            'POST',
+            url='http://test/',
+            files={'file': open(os.path.join(self.tempdir, 'test'))},
+            data={
+                'pr': '4242',
+                'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+                },
+            )
+        prepared_request = request.prepare()
+
+        response = self.request(
+            '/',
+            method='POST',
+            headers=prepared_request.headers,
+            body=prepared_request.body)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader('content-type'),
+                         'application/json')
+
+        pr_path = os.path.join(self.tempdir, 'pr', '4242')
+        commit_path = os.path.join(
+            self.tempdir,
+            'commit',
+            '0f3adff9d8f6a72c919822b8cde073a9e20505e0')
+
+        self.assertTrue(os.path.islink(pr_path))
+        self.assertEqual(commit_path, os.path.realpath(pr_path))
+
+    def test_post_slave(self):
+        request = Request(
+            'POST',
+            url='http://test/',
+            files={'file': open(os.path.join(self.tempdir, 'test'))},
+            data={
+                'slave': 'buildslave-test',
+                'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+                },
+            )
+        prepared_request = request.prepare()
+
+        response = self.request(
+            '/',
+            method='POST',
+            headers=prepared_request.headers,
+            body=prepared_request.body)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader('content-type'),
+                         'application/json')
+        self.assertTrue(os.path.exists(
+            os.path.join(
+                self.tempdir,
+                'commit',
+                '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+                'coverage.buildslave-test')))
 
     def test_translate_path(self):
         """
