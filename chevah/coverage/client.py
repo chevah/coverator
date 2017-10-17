@@ -13,7 +13,7 @@ def upload_file(filepath, url, slave, commit, branch, pr):
         files=files)
 
 
-def main(*argv, **kwargs):
+def main(*argv):
     parser = argparse.ArgumentParser(
         prog='chevah-coverage', add_help=True,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -44,10 +44,7 @@ def main(*argv, **kwargs):
         default=None,
         help='Specify a custom branch name')
 
-    if argv:
-        args = parser.parse_args(argv)
-    else:
-        args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     upload_file(
         args.coverage_file, args.url, args.slave,

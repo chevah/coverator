@@ -2,16 +2,18 @@ from __future__ import unicode_literals
 from BaseHTTPServer import HTTPServer
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 
+import argparse
 import coverage
 import glob
 import cgi
 import os
 import posixpath
 import urllib
+import sys
 
 
 class ChevahCoverageHandler(SimpleHTTPRequestHandler):
-    PATH = '/tmp/chevahcoverages'
+    PATH = None
     MINIMUM_NUMBER_OF_COVERAGE_FILES = 5
 
     def do_POST(self):
@@ -105,9 +107,22 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
         return path
 
 
-def main():
+def main(*argv):
+    parser = argparse.ArgumentParser(
+        prog='chevah-coverage-server', add_help=True,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Aggregates coverage data files and serves HTML report")
+
+    parser.add_argument(
+        'path',
+        default=None,
+        help='Path to store the data files and HTML report')
+
+    args = parser.parse_args(argv)
+
+    ChevahCoverageHandler.PATH = args.path
     server = HTTPServer(('', 8080), ChevahCoverageHandler)
     server.serve_forever()
 
 if __name__ == '__main__':
-    main()
+    main(*sys.argv[1:])
