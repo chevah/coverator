@@ -1,8 +1,13 @@
 # from mock import Mock
 
-from chevah.coverage.server import ChevahCoverageHandler, ReportGenerator
+from chevah.coverage.server import (
+    ChevahCoverageHandler,
+    ReportGenerator,
+    SetQueue,
+    )
 from test.test_httpservers import BaseTestCase, NoLogRequestHandler
 from requests import Request
+from unittest import TestCase
 
 import os
 import tempfile
@@ -258,3 +263,21 @@ class TestChevahCoverageHandler(BaseTestCase):
         sut = NoRequestChevahCoverageHandler()
         result = sut.translate_path('/test/')
         self.assertEqual(u'/a/generic/path/test/', result)
+
+
+class TestSetQueue(TestCase):
+    """
+    Tests for SetQueue class.
+    """
+    def test_set_queue(self):
+        """
+        Will not add repeated elements to the queue.
+        """
+        sut = SetQueue()
+        self.assertEquals(0, sut.qsize())
+        sut.put('test')
+        self.assertEquals(1, sut.qsize())
+        sut.put('test2')
+        self.assertEquals(2, sut.qsize())
+        sut.put('test')
+        self.assertEquals(2, sut.qsize())

@@ -17,7 +17,35 @@ import tempfile
 import urllib
 
 
+class SetQueue(Queue):
+    """
+    Implements a queue that ignores repeated values by using a set
+    to store the elements.
+    """
+    def _init(self, maxsize):
+        """
+        See: Queue.Queue
+        """
+        self.queue = set()
+
+    def _put(self, item):
+        """
+        See: Queue.Queue
+        """
+        self.queue.add(item)
+
+    def _get(self):
+        """
+        See: Queue.Queue
+        """
+        return self.queue.pop()
+
+
 class ChevahCoverageHandler(SimpleHTTPRequestHandler):
+    """
+    Implements an HTTPRequestHandler that will receive coverage data files,
+    combine them by commit and generate HTML reports.
+    """
     PATH = None
     MINIMUM_FILES = 6
     report_generator = None
@@ -34,8 +62,6 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             environ={'REQUEST_METHOD': 'POST',
                      'CONTENT_TYPE': self.headers['Content-Type'],
                      })
-
-        percentage = 0.0
 
         if 'file' in form:
             if not os.path.exists(self.PATH):  # pragma: no cover
@@ -73,7 +99,7 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             if len(coverage_files) > self.MINIMUM_FILES:
                 self.report_generator.queue.put(path)
 
-        response = '{result: %.2f}' % percentage
+        response = '{success:true}'
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header("Content-length", len(response))
