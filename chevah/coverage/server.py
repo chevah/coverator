@@ -45,6 +45,8 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
     """
     Implements an HTTPRequestHandler that will receive coverage data files,
     combine them by commit and generate HTML reports.
+
+    The uploaded files and the generated reports are stored at PATH.
     """
     PATH = None
     MINIMUM_FILES = 6
@@ -73,14 +75,15 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                     os.mkdir(os.path.join(self.PATH, dir_name))
 
             coverage_file = form['file']
-            data = coverage_file.file.read()
             commit = form.getvalue('commit', 'no-commit')
             slave = form.getvalue('slave', 'no-buildslave')
             path = os.path.join(self.PATH, 'commit', commit)
+
             if not os.path.exists(path):
                 os.mkdir(path)
 
-            open(os.path.join(path, 'coverage.%s' % slave), 'wb').write(data)
+            open(os.path.join(path, 'coverage.%s' % slave), 'wb').write(
+                coverage_file.read())
 
             for key in ('branch', 'pr'):
                 # Check if we are setting a branch and/or a PR and update
