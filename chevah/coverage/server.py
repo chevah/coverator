@@ -95,7 +95,6 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                     os.symlink(path, link_path)
 
             coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
-
             if len(coverage_files) > self.MINIMUM_FILES:
                 self.report_generator.queue.put(path)
 
@@ -187,7 +186,7 @@ def main():  # pragma: no cover
     config.read(args.config)
 
     ChevahCoverageHandler.PATH = config.get('server', 'path')
-    ChevahCoverageHandler.MINIMUM_FILES = config.get(
+    ChevahCoverageHandler.MINIMUM_FILES = config.getint(
         'server', 'min_buildslaves')
     ChevahCoverageHandler.report_generator = ReportGenerator()
     ChevahCoverageHandler.report_generator.start()
@@ -195,7 +194,12 @@ def main():  # pragma: no cover
     server = HTTPServer(
         ('', config.getint('server', 'port')),
         ChevahCoverageHandler)
-    server.serve_forever()
+
+    try:
+        server.serve_forever()
+    finally:
+        # Stops the report generator thread
+        ChevahCoverageHandler.report_generator.queue.put(None)
 
 
 if __name__ == '__main__':  # pragma: no cover
