@@ -1,5 +1,7 @@
-all: test
-	
+all: build
+
+develop: env
+	@build/bin/pip install -Ue '.[dev]'
 
 clean:
 	rm -rf build
@@ -7,19 +9,15 @@ clean:
 env:
 	@if [ ! -d "build" ]; then virtualenv build; fi
 
+build: env
+	@build/bin/pip install .
 
-deps: env
-	@build/bin/pip install -Ue '.[dev]'
-
-
-lint:
+lint: develop
 	@build/bin/pyflakes chevah/
 	@build/bin/pep8 chevah/
 
-
 test: lint
 	@build/bin/python setup.py test
-
 
 test_with_coverage: lint
 	@build/bin/nosetests --with-coverage --cover-package=chevah --cover-tests

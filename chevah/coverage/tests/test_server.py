@@ -1,6 +1,6 @@
 # from mock import Mock
 
-from chevah.coverage.server import ChevahCoverageHandler
+from chevah.coverage.server import ChevahCoverageHandler, ReportGenerator
 from test.test_httpservers import BaseTestCase, NoLogRequestHandler
 from requests import Request
 
@@ -26,11 +26,14 @@ class TestChevahCoverageHandler(BaseTestCase):
         basetempdir = tempfile.gettempdir()
         self.tempdir = tempfile.mkdtemp(dir=basetempdir)
         self.request_handler.PATH = self.tempdir
-        self.request_handler.MINIMUM_NUMBER_OF_COVERAGE_FILES = 2
+        self.request_handler.MINIMUM_FILES = 2
         self.datadir = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), 'data')
 
     def tearDown(self):
+        if self.request_handler.report_generator:
+            # Stops the generator thread
+            self.request_handler.report_generator.queue.put(None)
         try:
             shutil.rmtree(self.tempdir)
         except OSError:
@@ -63,7 +66,6 @@ class TestChevahCoverageHandler(BaseTestCase):
         """
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
-            data={'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0'},
             )
 
         self.assertEqual(response.status, 200)
@@ -73,8 +75,8 @@ class TestChevahCoverageHandler(BaseTestCase):
         uploaded_path = os.path.join(
             self.tempdir,
             'commit',
-            '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
-            'coverage.manual',
+            'no-commit',
+            'coverage.no-buildslave',
             )
 
         self.assertTrue(os.path.exists(uploaded_path))
@@ -208,6 +210,10 @@ class TestChevahCoverageHandler(BaseTestCase):
         after a minimum number of files from different slaves have been
         uploaded.
         """
+        # Starts the report generator thread.
+        self.request_handler.report_generator = ReportGenerator()
+        self.request_handler.report_generator.start()
+
         for i, slave in enumerate(['slave1', 'slave2', 'slave3']):
             response = self.request(
                 files={'file': open(os.path.join(
@@ -227,6 +233,16 @@ class TestChevahCoverageHandler(BaseTestCase):
                     'coverage.%s' % slave)
 
             self.assertTrue(os.path.exists(slave_path))
+
+        # Wait for the reporter generator thread to consume the queue.
+        self.request_handler.report_generator.queue.join()
+
+        index_path = os.path.join(
+            self.tempdir,
+            'commit',
+            '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+            'index.html')
+        self.assertTrue(os.path.exists(index_path))
 
     def test_translate_path(self):
         """

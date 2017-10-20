@@ -43,16 +43,20 @@ distribution = setup(
     install_requires=[
         'coverage==4.4.1',
         'requests==2.18.4',
-        'diff_cover==0.9.12',
         ],
     extras_require = {
         'dev': [
-            'mock',
             'nose',
             'pyflakes',
             'pep8',
             ],
     },
+    entry_points={
+        'console_scripts': [
+            'chevah-coverage-server = chevah.coverage.server:main',
+            'chevah-coverage = chevah.coverage.client:main',
+            ],
+        },
     test_suite = 'chevah.coverage.tests',
     cmdclass={
          'publish': PublishCommand,
