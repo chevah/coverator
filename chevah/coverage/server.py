@@ -74,7 +74,7 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                         os.path.join(self.PATH, dir_name)):
                     os.mkdir(os.path.join(self.PATH, dir_name))
 
-            coverage_file = form['file']
+            coverage_file = form['file'].file
             commit = form.getvalue('commit', 'no-commit')
             slave = form.getvalue('slave', 'no-buildslave')
             path = os.path.join(self.PATH, 'commit', commit)
