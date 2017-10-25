@@ -146,7 +146,7 @@ class TestChevahCoverageHandler(BaseTestCase):
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
             data={
-                'slave': 'buildslave-test',
+                'build': 'buildslave-test',
                 'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                 },
             )
@@ -225,7 +225,7 @@ class TestChevahCoverageHandler(BaseTestCase):
                     self.datadir,
                     'coverage_%d' % i))},
                 data={
-                    'slave': slave,
+                    'build': slave,
                     'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                     },
                 )

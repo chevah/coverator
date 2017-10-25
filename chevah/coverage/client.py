@@ -5,11 +5,11 @@ import argparse
 import sys
 
 
-def upload_file(filepath, url, slave, commit, branch, pr):
+def upload_file(filepath, url, build, commit, branch, pr):
     files = {'file': open(filepath)}
     requests.post(
         url,
-        data=dict(pr=pr, commit=commit, slave=slave, branch=branch),
+        data=dict(pr=pr, commit=commit, build=build, branch=branch),
         files=files)
 
 
@@ -24,7 +24,7 @@ def main():
         default=None,
         help='URL to upload to')
     parser.add_argument(
-        'coverage_file',
+        '--file',
         default=None,
         help='Coverage.py data file')
     parser.add_argument(
@@ -32,7 +32,7 @@ def main():
         default=None,
         help='Commit SHA')
     parser.add_argument(
-        '--slave',
+        '--build',
         default=None,
         help='Specify a buildslave')
     parser.add_argument(
@@ -47,7 +47,7 @@ def main():
     args = parser.parse_args(sys.argv[1:])
 
     upload_file(
-        args.coverage_file, args.url, args.slave,
+        args.file, args.url, args.build,
         args.commit, args.branch, args.pr)
 
 

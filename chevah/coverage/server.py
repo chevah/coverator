@@ -76,13 +76,13 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
 
             coverage_file = form['file'].file
             commit = form.getvalue('commit', 'no-commit')
-            slave = form.getvalue('slave', 'no-buildslave')
+            build = form.getvalue('build', 'no-buildslave')
             path = os.path.join(self.PATH, 'commit', commit)
 
             if not os.path.exists(path):
                 os.mkdir(path)
 
-            open(os.path.join(path, 'coverage.%s' % slave), 'wb').write(
+            open(os.path.join(path, 'coverage.%s' % build), 'wb').write(
                 coverage_file.read())
 
             for key in ('branch', 'pr'):
