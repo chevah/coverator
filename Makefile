@@ -14,7 +14,7 @@ build: env
 
 lint: develop
 	@build/bin/pyflakes chevah/
-	@build/bin/pep8 chevah/
+	@build/bin/pycodestyle chevah/
 
 test: lint
 	@build/bin/python setup.py test

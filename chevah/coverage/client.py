@@ -5,11 +5,15 @@ import argparse
 import sys
 
 
-def upload_file(filepath, url, build, commit, branch, pr):
+def upload_coverage(
+        filepath, url, repository=None, build=None,
+        commit=None, branch=None, pr=None):
     files = {'file': open(filepath)}
     requests.post(
         url,
-        data=dict(pr=pr, commit=commit, build=build, branch=branch),
+        data=dict(
+            repository=repository, pr=pr, commit=commit,
+            build=build, branch=branch),
         files=files)
 
 
@@ -27,6 +31,10 @@ def main():
         '--file',
         default=None,
         help='Coverage.py data file')
+    parser.add_argument(
+        '--repository',
+        default=None,
+        help='Specify the github repository (e.g. chevah/chevah-coverage)')
     parser.add_argument(
         '--commit',
         default=None,
@@ -46,8 +54,8 @@ def main():
 
     args = parser.parse_args(sys.argv[1:])
 
-    upload_file(
-        args.file, args.url, args.build,
+    upload_coverage(
+        args.file, args.url, args.repository, args.build,
         args.commit, args.branch, args.pr)
 
 

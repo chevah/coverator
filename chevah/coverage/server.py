@@ -69,15 +69,21 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             if not os.path.exists(self.PATH):  # pragma: no cover
                 os.mkdir(self.PATH)
 
+            repository = form.getvalue('repository', 'no-repository')
+            repository_path = os.path.join(self.PATH, repository)
+
+            if not os.path.exists(repository_path):
+                os.makedirs(repository_path)
+
             for dir_name in ('commit', 'branch', 'pr'):
                 if not os.path.exists(
-                        os.path.join(self.PATH, dir_name)):
-                    os.mkdir(os.path.join(self.PATH, dir_name))
+                        os.path.join(repository_path, dir_name)):
+                    os.mkdir(os.path.join(repository_path, dir_name))
 
             coverage_file = form['file'].file
             commit = form.getvalue('commit', 'no-commit')
             build = form.getvalue('build', 'no-buildslave')
-            path = os.path.join(self.PATH, 'commit', commit)
+            path = os.path.join(repository_path, 'commit', commit)
 
             if not os.path.exists(path):
                 os.mkdir(path)
@@ -92,7 +98,8 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                     value = form.getvalue(key)
                     open(os.path.join(path, '.coverage_%ss' % key), 'a').write(
                         value + os.linesep)
-                    link_path = os.path.join(self.PATH, '%s' % key, value)
+                    link_path = os.path.join(
+                        repository_path, '%s' % key, value)
                     if os.path.exists(link_path):
                         os.unlink(link_path)
                     os.symlink(path, link_path)
@@ -139,6 +146,9 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
 
 
 class ReportGenerator(Thread):
+    """
+    Consumer thread for generating reports without blocking the HTTP server.
+    """
     def __init__(self):
         self.queue = Queue()
         super(ReportGenerator, self).__init__()

@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.1.bgola2'
+VERSION = '0.1.bgola5'
 
 
 class PublishCommand(Command):
@@ -48,7 +48,7 @@ distribution = setup(
         'dev': [
             'nose',
             'pyflakes',
-            'pep8',
+            'pycodestyle',
             ],
     },
     entry_points={

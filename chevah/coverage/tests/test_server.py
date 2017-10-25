@@ -67,10 +67,11 @@ class TestChevahCoverageHandler(BaseTestCase):
 
     def test_post(self):
         """
-        Will receive a file and save it using the commit SHA for the file path.
+        Will receive a file and save it using the project name for the path.
         """
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
+            data={'repository': 'test/myrepo'},
             )
 
         self.assertEqual(response.status, 200)
@@ -79,6 +80,8 @@ class TestChevahCoverageHandler(BaseTestCase):
 
         uploaded_path = os.path.join(
             self.tempdir,
+            'test',
+            'myrepo',
             'commit',
             'no-commit',
             'coverage.no-buildslave',
@@ -96,6 +99,7 @@ class TestChevahCoverageHandler(BaseTestCase):
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
             data={
+                'repository': 'test/testrepo',
                 'branch': 'test-branch',
                 'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                 },
@@ -105,9 +109,10 @@ class TestChevahCoverageHandler(BaseTestCase):
         self.assertEqual(response.getheader('content-type'),
                          'application/json')
 
-        branch_path = os.path.join(self.tempdir, 'branch', 'test-branch')
+        repo_path = os.path.join(self.tempdir, 'test', 'testrepo')
+        branch_path = os.path.join(repo_path, 'branch', 'test-branch')
         commit_path = os.path.join(
-            self.tempdir,
+            repo_path,
             'commit',
             '0f3adff9d8f6a72c919822b8cde073a9e20505e0')
 
@@ -121,6 +126,7 @@ class TestChevahCoverageHandler(BaseTestCase):
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
             data={
+                'repository': 'test/testrepo',
                 'pr': '4242',
                 'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                 },
@@ -130,9 +136,10 @@ class TestChevahCoverageHandler(BaseTestCase):
         self.assertEqual(response.getheader('content-type'),
                          'application/json')
 
-        pr_path = os.path.join(self.tempdir, 'pr', '4242')
+        repo_path = os.path.join(self.tempdir, 'test', 'testrepo')
+        pr_path = os.path.join(repo_path, 'pr', '4242')
         commit_path = os.path.join(
-            self.tempdir,
+            repo_path,
             'commit',
             '0f3adff9d8f6a72c919822b8cde073a9e20505e0')
 
@@ -146,6 +153,7 @@ class TestChevahCoverageHandler(BaseTestCase):
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
             data={
+                'repository': 'test/testrepo',
                 'build': 'buildslave-test',
                 'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                 },
@@ -157,6 +165,8 @@ class TestChevahCoverageHandler(BaseTestCase):
         self.assertTrue(os.path.exists(
             os.path.join(
                 self.tempdir,
+                'test',
+                'testrepo',
                 'commit',
                 '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                 'coverage.buildslave-test')))
@@ -168,6 +178,7 @@ class TestChevahCoverageHandler(BaseTestCase):
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
             data={
+                'repository': 'test/testrepo',
                 'branch': 'branch1',
                 'pr': '4242',
                 'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
@@ -178,9 +189,10 @@ class TestChevahCoverageHandler(BaseTestCase):
         self.assertEqual(response.getheader('content-type'),
                          'application/json')
 
-        pr_path = os.path.join(self.tempdir, 'pr', '4242')
+        repo_path = os.path.join(self.tempdir, 'test', 'testrepo')
+        pr_path = os.path.join(repo_path, 'pr', '4242')
         commit_path = os.path.join(
-            self.tempdir,
+            repo_path,
             'commit',
             '0f3adff9d8f6a72c919822b8cde073a9e20505e0')
 
@@ -190,6 +202,7 @@ class TestChevahCoverageHandler(BaseTestCase):
         response = self.request(
             files={'file': open(os.path.join(self.datadir, 'coverage_0'))},
             data={
+                'repository': 'test/testrepo',
                 'branch': 'branch1',
                 'pr': '4242',
                 'commit': 'a95c77e348129f99837603bc1354ceef32a20e4e',
@@ -200,9 +213,8 @@ class TestChevahCoverageHandler(BaseTestCase):
         self.assertEqual(response.getheader('content-type'),
                          'application/json')
 
-        pr_path = os.path.join(self.tempdir, 'pr', '4242')
         commit_path = os.path.join(
-            self.tempdir,
+            repo_path,
             'commit',
             'a95c77e348129f99837603bc1354ceef32a20e4e')
 
@@ -225,6 +237,7 @@ class TestChevahCoverageHandler(BaseTestCase):
                     self.datadir,
                     'coverage_%d' % i))},
                 data={
+                    'repository': 'test/testrepo',
                     'build': slave,
                     'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                     },
@@ -233,6 +246,8 @@ class TestChevahCoverageHandler(BaseTestCase):
             self.assertEqual(response.status, 200)
             slave_path = os.path.join(
                     self.tempdir,
+                    'test',
+                    'testrepo',
                     'commit',
                     '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
                     'coverage.%s' % slave)
@@ -242,8 +257,10 @@ class TestChevahCoverageHandler(BaseTestCase):
         # Wait for the reporter generator thread to consume the queue.
         self.request_handler.report_generator.queue.join()
 
+        repo_path = os.path.join(self.tempdir, 'test', 'testrepo')
+
         index_path = os.path.join(
-            self.tempdir,
+            repo_path,
             'commit',
             '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
             'index.html')
