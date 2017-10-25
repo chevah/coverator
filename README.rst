@@ -39,7 +39,7 @@ You can generate a coverage file by running:
 
 Then to upload a coverage file run the command:
 
-`build/bin/chevah-coverage http://localhost:8080/ .coverage`
+`build/bin/chevah-coverage --file .coverage http://localhost:8080/`
 
 You can specify the `commit`, the buildslave name, branch name and
 pull request ID. To check all command line options run:
