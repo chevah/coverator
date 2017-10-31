@@ -69,7 +69,11 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             if not os.path.exists(self.PATH):  # pragma: no cover
                 os.mkdir(self.PATH)
 
-            repository = form.getvalue('repository', 'no-repository')
+            repository = form.getvalue('repository', None)
+
+            if repository is None:
+                repository = 'no-repository'
+
             repository_path = os.path.join(self.PATH, repository)
 
             if not os.path.exists(repository_path):
