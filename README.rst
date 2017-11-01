@@ -19,9 +19,9 @@ Server
 ======
 
 First edit the config file (`config.ini`) setting the path where all coverage
-files will be stored, then run:
+files will be stored, then run::
 
-`build/bin/chevah-coverage-server config.ini`
+  $ build/bin/chevah-coverage-server config.ini
 
 Whenever you upload enough files (see the `min_buildslaves` configuration)
 to the server you can see the reports by accessing `http://localhost:8080/`.
@@ -33,15 +33,15 @@ pull request ID.
 Client
 ======
 
-You can generate a coverage file by running:
+You can generate a coverage file by running::
 
-`make test_with_coverage`
+  $ make test_with_coverage
 
-Then to upload a coverage file run the command:
+Then to upload a coverage file run the command::
 
-`build/bin/chevah-coverage --file .coverage http://localhost:8080/`
+  $ build/bin/chevah-coverage --file .coverage http://localhost:8080/
 
 You can specify the `commit`, the buildslave name, branch name and
-pull request ID. To check all command line options run:
+pull request ID. To check all command line options run::
 
-`./build/bin/chevah-coverage -h`
+  $ build/bin/chevah-coverage -h
