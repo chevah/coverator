@@ -1,8 +1,10 @@
 from __future__ import unicode_literals
+
 from BaseHTTPServer import HTTPServer
-from SimpleHTTPServer import SimpleHTTPRequestHandler
 from ConfigParser import SafeConfigParser
+from git import Repo
 from Queue import Queue
+from SimpleHTTPServer import SimpleHTTPRequestHandler
 from threading import Thread
 
 import argparse
@@ -69,12 +71,12 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             if not os.path.exists(self.PATH):  # pragma: no cover
                 os.mkdir(self.PATH)
 
-            repository = form.getvalue('repository', None)
+            repo = form.getvalue('repository', None)
 
-            if repository is None:
-                repository = 'no-repository'
+            if repo is None:
+                repo = 'no-repository'
 
-            repository_path = os.path.join(self.PATH, repository)
+            repository_path = os.path.join(self.PATH, repo)
 
             if not os.path.exists(repository_path):
                 os.makedirs(repository_path)
@@ -110,7 +112,7 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
 
             coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
             if len(coverage_files) > self.MINIMUM_FILES:
-                self.report_generator.queue.put(path)
+                self.report_generator.queue.put((self.PATH, repo, commit))
 
         response = '{success:true}'
         self.send_response(200)
@@ -162,27 +164,70 @@ class ReportGenerator(Thread):
         Combine coverage data files and generate HTML reports.
         """
         while True:
-            path = self.queue.get()
-            if path is None:
+            value = self.queue.get()
+            if value is None:
+                # Means there is nothing else to consume.
                 break
-            # The coverage API will delete the coverage data files when
-            # combining them. We don't want that, so let's copy to a
-            # temporary dir first.
-            tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
-            coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
-            for coverage_file in coverage_files:
-                shutil.copy(coverage_file, tempdir)
 
-            c = coverage.Coverage(data_file=os.path.join(path, 'coverage'))
-            c.combine(data_paths=[path], strict=True)
-            c.load()
+            root, repository, commit = value
 
-            for coverage_file in coverage_files:
-                shutil.copy(
-                    os.path.join(tempdir, os.path.basename(coverage_file)),
-                    os.path.dirname(coverage_file))
-            shutil.rmtree(tempdir)
-            c.html_report(directory=path)
+            # The path to save the reports
+            path = os.path.join(root, repository, 'commit', commit)
+
+            # First we check if we have already cloned this repository,
+            # if not, we clone it from github.
+            git_repo_path = os.path.join(root, repository, 'git-repo')
+
+            if not os.path.exists(git_repo_path):
+                git_repo = Repo.clone_from(
+                    'http://github.com/%s' % repository, git_repo_path)
+            else:
+                git_repo = Repo(git_repo_path)
+                git_repo.head.reference = git_repo.refs['master']
+                git_repo.head.reset(index=True, working_tree=True)
+
+            git_repo.remote().pull()
+
+            # Checkout the commit we are generating the report
+            git_commit = git_repo.commit(commit)
+            git_repo.head.reference = git_commit
+            git_repo.head.reset(index=True, working_tree=True)
+
+            old_path = os.getcwd()
+            try:
+                # The coverage API will delete the coverage data files when
+                # combining them. We don't want that, so let's copy to a
+                # temporary dir first.
+                tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
+                coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
+                for coverage_file in coverage_files:
+                    shutil.copy(coverage_file, tempdir)
+
+                # Move to the cloned repo and prepare for the reports
+                os.chdir(os.path.join(git_repo_path))
+                c = coverage.Coverage(data_file=os.path.join(path, 'coverage'))
+                c.combine(data_paths=[path], strict=True)
+
+                # Generate aggregated XML and HTML reports.
+                c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
+                c.html_report(directory=path)
+
+                # Generate also the diff-coverage report.
+                from diff_cover.tool import main as diff_cover_main
+                diff_cover_main(argv=[
+                    'diff-cover',
+                    os.path.join(path, 'coverage.xml'),
+                    '--html-report',
+                    os.path.join(path, 'diff-cover.html')])
+            finally:
+                os.chdir(old_path)
+                # Restore files removed by coverage.
+                for coverage_file in coverage_files:
+                    shutil.copy(
+                        os.path.join(tempdir, os.path.basename(coverage_file)),
+                        os.path.dirname(coverage_file))
+                shutil.rmtree(tempdir)
+
             self.queue.task_done()
 
 
@@ -202,7 +247,8 @@ def main():  # pragma: no cover
     config = SafeConfigParser()
     config.read(args.config)
 
-    ChevahCoverageHandler.PATH = config.get('server', 'path')
+    path = config.get('server', 'path')
+    ChevahCoverageHandler.PATH = os.path.abspath(path)
     ChevahCoverageHandler.MINIMUM_FILES = config.getint(
         'server', 'min_buildslaves')
     ChevahCoverageHandler.report_generator = ReportGenerator()

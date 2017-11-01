@@ -43,6 +43,7 @@ distribution = setup(
     install_requires=[
         'coverage==4.4.1',
         'requests==2.18.4',
+        'GitPython==2.1.7',
         ],
     extras_require = {
         'dev': [
