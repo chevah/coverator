@@ -4,3 +4,4 @@ dist/
 virtualenv/
 *.egg-info/
 build/
+coverage-data/

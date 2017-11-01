@@ -5,9 +5,12 @@ import argparse
 import sys
 
 
+DEFAULT_URL = 'http://coverage.chevah.com:8080'
+
+
 def upload_coverage(
-        filepath, url, repository=None, build=None,
-        commit=None, branch=None, pr=None):
+        filepath, repository=None, build=None, commit=None,
+        branch=None, pr=None, url=DEFAULT_URL):
     files = {'file': open(filepath)}
     requests.post(
         url,
@@ -25,7 +28,7 @@ def main():
 
     parser.add_argument(
         'url',
-        default=None,
+        default=DEFAULT_URL,
         help='URL to upload to')
     parser.add_argument(
         '--file',
@@ -55,8 +58,8 @@ def main():
     args = parser.parse_args(sys.argv[1:])
 
     upload_coverage(
-        args.file, args.url, args.repository, args.build,
-        args.commit, args.branch, args.pr)
+        args.file, args.repository, args.build,
+        args.commit, args.branch, args.pr, args.url)
 
 
 if __name__ == '__main__':
