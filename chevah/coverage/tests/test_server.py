@@ -83,7 +83,7 @@ class TestChevahCoverageHandler(BaseTestCase):
             repo_path,
             'commit',
             'no-commit',
-            'coverage.no-buildslave',
+            'coverage.data.no-buildslave',
             )
 
         self.assertTrue(os.path.exists(uploaded_path))
@@ -164,7 +164,7 @@ class TestChevahCoverageHandler(BaseTestCase):
                 'no-repository',
                 'commit',
                 '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
-                'coverage.buildslave-test')))
+                'coverage.data.buildslave-test')))
 
     def test_post_pr_branch_update_symlinks(self):
         """
@@ -222,7 +222,36 @@ class TestChevahCoverageHandler(BaseTestCase):
         """
         # Starts the report generator thread.
         self.request_handler.report_generator = ReportGenerator()
+        self.request_handler.report_generator.github_base_url = None
         self.request_handler.report_generator.start()
+
+        # Create a fake GitHub repository
+        repo_name = 'test/repo'
+        repo_path = os.path.join(self.tempdir, repo_name)
+        git_repo_path = os.path.join(repo_path, 'git-repo')
+        os.makedirs(os.path.join(git_repo_path, 'test'))
+        import git
+        import copy
+        os.environ.copy = lambda: copy.deepcopy(os.environ)
+        r = git.Repo.init(git_repo_path)
+        shutil.copy(
+            os.path.join(self.datadir, 'coveragerc'),
+            os.path.join(git_repo_path, '.coveragerc'))
+        shutil.copy(
+            os.path.join(self.datadir, 'test', 'file.py'),
+            os.path.join(git_repo_path, 'test', 'file.py'))
+        shutil.copy(
+            os.path.join(self.datadir, 'test', '__init__.py'),
+            os.path.join(git_repo_path, 'test', '__init__.py'))
+
+        r.index.add([
+            os.path.join(git_repo_path, '.coveragerc'),
+            os.path.join(git_repo_path, 'test/file.py'),
+            os.path.join(git_repo_path, 'test/__init__.py'),
+            ])
+        r.index.commit("simple commit")
+        commit = r.refs['master'].commit.hexsha
+        commit_path = os.path.join(repo_path, 'commit', commit)
 
         for i, slave in enumerate(['slave1', 'slave2', 'slave3']):
             response = self.request(
@@ -231,31 +260,22 @@ class TestChevahCoverageHandler(BaseTestCase):
                     'coverage_%d' % i))},
                 data={
                     'build': slave,
-                    'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+                    'repository': repo_name,
+                    'commit': commit,
                     },
                 )
 
             self.assertEqual(response.status, 200)
             slave_path = os.path.join(
-                    self.tempdir,
-                    'no-repository',
-                    'commit',
-                    '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
-                    'coverage.%s' % slave)
-
+                    commit_path,
+                    'coverage.data.%s' % slave)
             self.assertTrue(os.path.exists(slave_path))
 
         # Wait for the reporter generator thread to consume the queue.
         self.request_handler.report_generator.queue.join()
 
-        repo_path = os.path.join(self.tempdir, 'no-repository')
-
-        index_path = os.path.join(
-            repo_path,
-            'commit',
-            '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
-            'index.html')
-        self.assertTrue(os.path.exists(index_path))
+        self.assertTrue(os.path.exists(
+            os.path.join(commit_path, 'index.html')))
 
     def test_translate_path(self):
         """

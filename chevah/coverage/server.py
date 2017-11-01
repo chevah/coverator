@@ -19,6 +19,9 @@ import tempfile
 import urllib
 
 
+COVERAGE_DATA_PREFIX = 'coverage.data.'
+
+
 class SetQueue(Queue):
     """
     Implements a queue that ignores repeated values by using a set
@@ -94,8 +97,9 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
             if not os.path.exists(path):
                 os.mkdir(path)
 
-            open(os.path.join(path, 'coverage.%s' % build), 'wb').write(
-                coverage_file.read())
+            open(os.path.join(path, '%s%s' % (
+                    COVERAGE_DATA_PREFIX, build)), 'wb').write(
+                    coverage_file.read())
 
             for key in ('branch', 'pr'):
                 # Check if we are setting a branch and/or a PR and update
@@ -110,7 +114,8 @@ class ChevahCoverageHandler(SimpleHTTPRequestHandler):
                         os.unlink(link_path)
                     os.symlink(path, link_path)
 
-            coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
+            coverage_files = glob.glob(os.path.join(
+                path, '%s*' % COVERAGE_DATA_PREFIX))
             if len(coverage_files) > self.MINIMUM_FILES:
                 self.report_generator.queue.put((self.PATH, repo, commit))
 
@@ -155,6 +160,10 @@ class ReportGenerator(Thread):
     """
     Consumer thread for generating reports without blocking the HTTP server.
     """
+
+    # This is here to help with testing
+    github_base_url = 'http://github.com'
+
     def __init__(self):
         self.queue = Queue()
         super(ReportGenerator, self).__init__()
@@ -169,29 +178,30 @@ class ReportGenerator(Thread):
                 # Means there is nothing else to consume.
                 break
 
-            root, repository, commit = value
+            root, repo, commit = value
 
             # The path to save the reports
-            path = os.path.join(root, repository, 'commit', commit)
+            path = os.path.join(root, repo, 'commit', commit)
+            git_repo_path = os.path.join(root, repo, 'git-repo')
 
-            # First we check if we have already cloned this repository,
-            # if not, we clone it from github.
-            git_repo_path = os.path.join(root, repository, 'git-repo')
+            # This is here to help with testing
+            if self.github_base_url is not None:
+                # First we check if we have already cloned this repository,
+                # if not, we clone it from github.
+                if not os.path.exists(git_repo_path):
+                    git_repo = Repo.clone_from(
+                        '%s/%s' % (self.github_base_url, repo), git_repo_path)
+                else:
+                    git_repo = Repo(git_repo_path)
+                    git_repo.head.reference = git_repo.refs['master']
+                    git_repo.head.reset(index=True, working_tree=True)
 
-            if not os.path.exists(git_repo_path):
-                git_repo = Repo.clone_from(
-                    'http://github.com/%s' % repository, git_repo_path)
-            else:
-                git_repo = Repo(git_repo_path)
-                git_repo.head.reference = git_repo.refs['master']
+                git_repo.remote().pull()
+
+                # Checkout the commit we are generating the report
+                git_commit = git_repo.commit(commit)
+                git_repo.head.reference = git_commit
                 git_repo.head.reset(index=True, working_tree=True)
-
-            git_repo.remote().pull()
-
-            # Checkout the commit we are generating the report
-            git_commit = git_repo.commit(commit)
-            git_repo.head.reference = git_commit
-            git_repo.head.reset(index=True, working_tree=True)
 
             old_path = os.getcwd()
             try:
@@ -199,26 +209,29 @@ class ReportGenerator(Thread):
                 # combining them. We don't want that, so let's copy to a
                 # temporary dir first.
                 tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
-                coverage_files = glob.glob(os.path.join(path, 'coverage.*'))
+                coverage_files = glob.glob(
+                    os.path.join(path, '%s*' % COVERAGE_DATA_PREFIX))
                 for coverage_file in coverage_files:
                     shutil.copy(coverage_file, tempdir)
 
                 # Move to the cloned repo and prepare for the reports
                 os.chdir(os.path.join(git_repo_path))
-                c = coverage.Coverage(data_file=os.path.join(path, 'coverage'))
+                c = coverage.Coverage(data_file=os.path.join(
+                    path, COVERAGE_DATA_PREFIX[:-1]))
                 c.combine(data_paths=[path], strict=True)
 
                 # Generate aggregated XML and HTML reports.
                 c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
                 c.html_report(directory=path)
 
-                # Generate also the diff-coverage report.
-                from diff_cover.tool import main as diff_cover_main
-                diff_cover_main(argv=[
-                    'diff-cover',
-                    os.path.join(path, 'coverage.xml'),
-                    '--html-report',
-                    os.path.join(path, 'diff-cover.html')])
+                if self.github_base_url is not None:
+                    # Generate also the diff-coverage report.
+                    from diff_cover.tool import main as diff_cover_main
+                    diff_cover_main(argv=[
+                        'diff-cover',
+                        os.path.join(path, 'coverage.xml'),
+                        '--html-report',
+                        os.path.join(path, 'diff-cover.html')])
             finally:
                 os.chdir(old_path)
                 # Restore files removed by coverage.
