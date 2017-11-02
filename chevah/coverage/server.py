@@ -195,9 +195,11 @@ class ReportGenerator(Thread):
         git_repo.head.reset(index=True, working_tree=True)
 
     def notifyGithub(self, repo, commit, coverage_total):
+        repo_url = repo
+        if repo_url.endswith('.git'):
+            repo_url = repo_url[:-4]
         github_commit = self.github.get_repo(
-                repo.strip('.git')).get_commit(commit)
-
+                repo_url).get_commit(commit)
         status = 'success'
 
         if coverage_total < 100:
@@ -205,7 +207,7 @@ class ReportGenerator(Thread):
 
         github_commit.create_status(
             status,
-            '%s/%s/commit/%s' % (self.url, repo, commit),
+            'http://172.20.245.1:8080/%s/commit/%s' % (repo, commit),
             'Coverage is %d%%' % coverage_total,
             'chevah/coverage')
 
@@ -287,7 +289,7 @@ def main():  # pragma: no cover
 
     args = parser.parse_args(sys.argv[1:])
 
-    config = SafeConfigParser()
+    config = SafeConfigParser({'github_token': None})
     config.read(args.config)
 
     github_token = config.get('server', 'github_token')
