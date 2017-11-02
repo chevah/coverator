@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.1.bgola6'
+VERSION = '0.1.bgola7'
 
 
 class PublishCommand(Command):
@@ -42,9 +42,9 @@ distribution = setup(
     packages=find_packages('.'),
     install_requires=[
         'coverage==4.4.1',
-        'requests==2.18.4',
-        'diff-cover==0.9.12',
-        'GitPython==2.1.7',
+        'requests==2.17.3',
+        'diff-cover==0.9.11',
+        'GitPython==1.0.1',
         ],
     extras_require = {
         'dev': [
