@@ -194,7 +194,8 @@ class ReportGenerator(Thread):
         git_repo.head.reference = git_commit
         git_repo.head.reset(index=True, working_tree=True)
 
-    def notifyGithub(self, repo, commit, coverage_total, coverage_diff):
+    def notifyGithub(
+            self, repo, commit, coverage_total=None, coverage_diff=None):
         """
         Creates a commit status on github to report the coverage results.
         """
@@ -204,27 +205,25 @@ class ReportGenerator(Thread):
         github_commit = self.github.get_repo(
                 repo_url).get_commit(commit)
 
-        status = 'success'
-        if coverage_total < 100:
-            status = 'failure'
+        for coverage_status in [
+                ('', 'coverage/project', coverage_total),
+                ('/diff-cover.html', 'coverage/project/diff', coverage_diff)]:
+            # Get the report result for each context, the tuple format is
+            # (report_url, report_context, report_percentage)
+            status = 'pending'
+            status_msg = 'Waiting for build.'
+            if coverage_status[2] is not None:
+                status = 'success'
+                if coverage_status[2] < 100:
+                    status = 'failure'
+                status_msg = 'Total coverage is %d%%' % coverage_status[2],
 
-        github_commit.create_status(
-            status,
-            'http://172.20.245.1:8080/%s/commit/%s' % (repo, commit),
-            'Total coverage is %d%%' % coverage_total,
-            'coverage/project')
-
-        # diff-cover results
-        status = 'sucess'
-        if coverage_diff < 100:
-            status = 'failure'
-
-        github_commit.create_status(
-            status,
-            'http://172.20.245.1:8080/%s/commit/%s/diff-cover.html' % (
-                repo, commit),
-            'Total coverage is %d%%' % coverage_diff,
-            'coverage/project/diff')
+            github_commit.create_status(
+                status,
+                'http://172.20.245.1:8080/%s/commit/%s%s' % (
+                    repo, commit, coverage_status[0]),
+                status_msg,
+                coverage_status[1])
 
     def run(self):
         """
@@ -244,6 +243,7 @@ class ReportGenerator(Thread):
 
             # This check is here to help with testing
             if self.github_base_url is not None:  # pragma: no cover
+                self.notifyGithub(repo, commit)
                 self.cloneGitRepo(repo, git_repo_path, commit)
 
             old_path = os.getcwd()
