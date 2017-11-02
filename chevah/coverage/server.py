@@ -194,22 +194,37 @@ class ReportGenerator(Thread):
         git_repo.head.reference = git_commit
         git_repo.head.reset(index=True, working_tree=True)
 
-    def notifyGithub(self, repo, commit, coverage_total):
+    def notifyGithub(self, repo, commit, coverage_total, coverage_diff):
+        """
+        Creates a commit status on github to report the coverage results.
+        """
         repo_url = repo
         if repo_url.endswith('.git'):
             repo_url = repo_url[:-4]
         github_commit = self.github.get_repo(
                 repo_url).get_commit(commit)
-        status = 'success'
 
+        status = 'success'
         if coverage_total < 100:
             status = 'failure'
 
         github_commit.create_status(
             status,
             'http://172.20.245.1:8080/%s/commit/%s' % (repo, commit),
-            'Coverage is %d%%' % coverage_total,
-            'chevah/coverage')
+            'Total coverage is %d%%' % coverage_total,
+            'coverage/project')
+
+        # diff-cover results
+        status = 'sucess'
+        if coverage_diff < 100:
+            status = 'failure'
+
+        github_commit.create_status(
+            status,
+            'http://172.20.245.1:8080/%s/commit/%s/diff-cover.html' % (
+                repo, commit),
+            'Total coverage is %d%%' % coverage_diff,
+            'coverage/project/diff')
 
     def run(self):
         """
@@ -253,17 +268,17 @@ class ReportGenerator(Thread):
                 c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
                 coverage_total = c.html_report(directory=path)
 
-                if self.github_base_url is not None:  # pragma: no cover
+                if self.github is not None:  # pragma: no cover
                     # Generate also the diff-coverage report.
-                    from diff_cover.tool import main as diff_cover_main
-                    diff_cover_main(argv=[
-                        'diff-cover',
-                        os.path.join(path, 'coverage.xml'),
-                        '--html-report',
-                        os.path.join(path, 'diff-cover.html')])
-
-                if self.github is not None:
-                    self.notifyGithub(repo, commit, coverage_total)
+                    from diff_cover.tool import generate_coverage_report
+                    from diff_cover.git_path import GitPathTool
+                    GitPathTool.set_cwd(os.getcwd())
+                    coverage_diff = generate_coverage_report(
+                        [os.path.join(path, 'coverage.xml')],
+                        'master',
+                        os.path.join(path, 'diff-cover.html'))
+                    self.notifyGithub(
+                        repo, commit, coverage_total, coverage_diff)
             finally:
                 os.chdir(old_path)
                 # Restore files removed by coverage.
