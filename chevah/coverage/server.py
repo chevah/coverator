@@ -211,7 +211,7 @@ class ReportGenerator(Thread):
             # Get the report result for each context, the tuple format is
             # (report_url, report_context, report_percentage)
             status = 'pending'
-            status_msg = 'Waiting for build.'
+            status_msg = 'Waiting for status to be reported'
             if coverage_status[2] is not None:
                 status = 'success'
                 if coverage_status[2] < 100:
