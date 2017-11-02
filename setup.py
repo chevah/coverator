@@ -45,6 +45,7 @@ distribution = setup(
         'requests==2.17.3',
         'diff-cover==0.9.11',
         'GitPython==1.0.1',
+        'pygithub==1.34',
         ],
     extras_require = {
         'dev': [

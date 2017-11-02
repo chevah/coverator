@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 from BaseHTTPServer import HTTPServer
 from ConfigParser import SafeConfigParser
 from git import Repo
+from github import Github
 from Queue import Queue
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 from threading import Thread
@@ -164,9 +165,49 @@ class ReportGenerator(Thread):
     # This is here to help with testing
     github_base_url = 'http://github.com'
 
-    def __init__(self):
+    def __init__(self, github_token=None):
         self.queue = Queue()
+        self.github = None
+        if github_token:
+            self.github = Github(github_token)
         super(ReportGenerator, self).__init__()
+
+    def cloneGitRepo(self, repo, path, commit):
+        """
+        Clone a repository `repo` from github into `path` and
+        checkout the revision `commit`.
+        """
+        # First we check if we have already cloned this repository,
+        # if not, we clone it from github.
+        if not os.path.exists(path):
+            git_repo = Repo.clone_from(
+                '%s/%s' % (self.github_base_url, repo), path)
+        else:
+            git_repo = Repo(path)
+            git_repo.head.reference = git_repo.refs['master']
+            git_repo.head.reset(index=True, working_tree=True)
+
+        git_repo.remote().pull()
+
+        # Checkout the commit
+        git_commit = git_repo.commit(commit)
+        git_repo.head.reference = git_commit
+        git_repo.head.reset(index=True, working_tree=True)
+
+    def notifyGithub(self, repo, commit, coverage_total):
+        github_commit = self.github.get_repo(
+                repo.strip('.git')).get_commit(commit)
+
+        status = 'success'
+
+        if coverage_total < 100:
+            status = 'failure'
+
+        github_commit.create_status(
+            status,
+            '%s/%s/commit/%s' % (self.url, repo, commit),
+            'Coverage is %d%%' % coverage_total,
+            'chevah/coverage')
 
     def run(self):
         """
@@ -184,26 +225,12 @@ class ReportGenerator(Thread):
             path = os.path.join(root, repo, 'commit', commit)
             git_repo_path = os.path.join(root, repo, 'git-repo')
 
-            # This is here to help with testing
-            if self.github_base_url is not None:
-                # First we check if we have already cloned this repository,
-                # if not, we clone it from github.
-                if not os.path.exists(git_repo_path):
-                    git_repo = Repo.clone_from(
-                        '%s/%s' % (self.github_base_url, repo), git_repo_path)
-                else:
-                    git_repo = Repo(git_repo_path)
-                    git_repo.head.reference = git_repo.refs['master']
-                    git_repo.head.reset(index=True, working_tree=True)
-
-                git_repo.remote().pull()
-
-                # Checkout the commit we are generating the report
-                git_commit = git_repo.commit(commit)
-                git_repo.head.reference = git_commit
-                git_repo.head.reset(index=True, working_tree=True)
+            # This check is here to help with testing
+            if self.github_base_url is not None:  # pragma: no cover
+                self.cloneGitRepo(repo, git_repo_path, commit)
 
             old_path = os.getcwd()
+
             try:
                 # The coverage API will delete the coverage data files when
                 # combining them. We don't want that, so let's copy to a
@@ -222,9 +249,9 @@ class ReportGenerator(Thread):
 
                 # Generate aggregated XML and HTML reports.
                 c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
-                c.html_report(directory=path)
+                coverage_total = c.html_report(directory=path)
 
-                if self.github_base_url is not None:
+                if self.github_base_url is not None:  # pragma: no cover
                     # Generate also the diff-coverage report.
                     from diff_cover.tool import main as diff_cover_main
                     diff_cover_main(argv=[
@@ -232,6 +259,9 @@ class ReportGenerator(Thread):
                         os.path.join(path, 'coverage.xml'),
                         '--html-report',
                         os.path.join(path, 'diff-cover.html')])
+
+                if self.github is not None:
+                    self.notifyGithub(repo, commit, coverage_total)
             finally:
                 os.chdir(old_path)
                 # Restore files removed by coverage.
@@ -260,11 +290,13 @@ def main():  # pragma: no cover
     config = SafeConfigParser()
     config.read(args.config)
 
+    github_token = config.get('server', 'github_token')
     path = config.get('server', 'path')
+
     ChevahCoverageHandler.PATH = os.path.abspath(path)
     ChevahCoverageHandler.MINIMUM_FILES = config.getint(
         'server', 'min_buildslaves')
-    ChevahCoverageHandler.report_generator = ReportGenerator()
+    ChevahCoverageHandler.report_generator = ReportGenerator(github_token)
     ChevahCoverageHandler.report_generator.start()
 
     server = HTTPServer(
