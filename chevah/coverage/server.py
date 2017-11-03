@@ -216,7 +216,7 @@ class ReportGenerator(Thread):
                 status = 'success'
                 if coverage_status[2] < 100:
                     status = 'failure'
-                status_msg = 'Total coverage is %d%%' % coverage_status[2],
+                status_msg = 'Coverage is %d%%' % coverage_status[2]
 
             github_commit.create_status(
                 status,
