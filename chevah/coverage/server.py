@@ -230,65 +230,68 @@ class ReportGenerator(Thread):
         Combine coverage data files and generate HTML reports.
         """
         while True:
-            value = self.queue.get()
-            if value is None:
-                # Means there is nothing else to consume.
-                break
-
-            root, repo, commit = value
-
-            # The path to save the reports
-            path = os.path.join(root, repo, 'commit', commit)
-            git_repo_path = os.path.join(root, repo, 'git-repo')
-
-            # This check is here to help with testing
-            if self.github_base_url is not None:  # pragma: no cover
-                self.notifyGithub(repo, commit)
-                self.cloneGitRepo(repo, git_repo_path, commit)
-
-            old_path = os.getcwd()
-
             try:
-                # The coverage API will delete the coverage data files when
-                # combining them. We don't want that, so let's copy to a
-                # temporary dir first.
-                tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
-                coverage_files = glob.glob(
-                    os.path.join(path, '%s*' % COVERAGE_DATA_PREFIX))
-                for coverage_file in coverage_files:
-                    shutil.copy(coverage_file, tempdir)
+                value = self.queue.get()
+                if value is None:
+                    # Means there is nothing else to consume.
+                    break
 
-                # Move to the cloned repo and prepare for the reports
-                os.chdir(os.path.join(git_repo_path))
-                c = coverage.Coverage(data_file=os.path.join(
-                    path, COVERAGE_DATA_PREFIX[:-1]))
-                c.combine(data_paths=[path], strict=True)
+                root, repo, commit = value
 
-                # Generate aggregated XML and HTML reports.
-                c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
-                coverage_total = c.html_report(directory=path)
+                # The path to save the reports
+                path = os.path.join(root, repo, 'commit', commit)
+                git_repo_path = os.path.join(root, repo, 'git-repo')
 
-                if self.github is not None:  # pragma: no cover
-                    # Generate also the diff-coverage report.
-                    from diff_cover.tool import generate_coverage_report
-                    from diff_cover.git_path import GitPathTool
-                    GitPathTool.set_cwd(os.getcwd())
-                    coverage_diff = generate_coverage_report(
-                        [os.path.join(path, 'coverage.xml')],
-                        'master',
-                        os.path.join(path, 'diff-cover.html'))
-                    self.notifyGithub(
-                        repo, commit, coverage_total, coverage_diff)
-            finally:
-                os.chdir(old_path)
-                # Restore files removed by coverage.
-                for coverage_file in coverage_files:
-                    shutil.copy(
-                        os.path.join(tempdir, os.path.basename(coverage_file)),
-                        os.path.dirname(coverage_file))
-                shutil.rmtree(tempdir)
+                # This check is here to help with testing
+                if self.github_base_url is not None:  # pragma: no cover
+                    self.notifyGithub(repo, commit)
+                    self.cloneGitRepo(repo, git_repo_path, commit)
 
-            self.queue.task_done()
+                old_path = os.getcwd()
+
+                try:
+                    # The coverage API will delete the coverage data files when
+                    # combining them. We don't want that, so let's copy to a
+                    # temporary dir first.
+                    tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
+                    coverage_files = glob.glob(
+                        os.path.join(path, '%s*' % COVERAGE_DATA_PREFIX))
+                    for coverage_file in coverage_files:
+                        shutil.copy(coverage_file, tempdir)
+
+                    # Move to the cloned repo and prepare for the reports
+                    os.chdir(os.path.join(git_repo_path))
+                    c = coverage.Coverage(data_file=os.path.join(
+                        path, COVERAGE_DATA_PREFIX[:-1]))
+                    c.combine(data_paths=[path], strict=True)
+
+                    # Generate aggregated XML and HTML reports.
+                    c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
+                    coverage_total = c.html_report(directory=path)
+
+                    if self.github is not None:  # pragma: no cover
+                        # Generate also the diff-coverage report.
+                        from diff_cover.tool import generate_coverage_report
+                        from diff_cover.git_path import GitPathTool
+                        GitPathTool.set_cwd(os.getcwd())
+                        coverage_diff = generate_coverage_report(
+                            [os.path.join(path, 'coverage.xml')],
+                            'master',
+                            os.path.join(path, 'diff-cover.html'))
+                        self.notifyGithub(
+                            repo, commit, coverage_total, coverage_diff)
+                finally:
+                    os.chdir(old_path)
+                    # Restore files removed by coverage.
+                    for coverage_file in coverage_files:
+                        shutil.copy(
+                            os.path.join(
+                                tempdir, os.path.basename(coverage_file)),
+                            os.path.dirname(coverage_file))
+                    shutil.rmtree(tempdir)
+                self.queue.task_done()
+            except:
+                print('Exception in thread:', sys.exc_info()[0])
 
 
 def main():  # pragma: no cover

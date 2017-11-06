@@ -12,12 +12,18 @@ def upload_coverage(
         filepath, repository=None, build=None, commit=None,
         branch=None, pr=None, url=DEFAULT_URL):
     files = {'file': open(filepath)}
-    requests.post(
+    print('Uploading coverage data file')
+    response = requests.post(
         url,
         data=dict(
             repository=repository, pr=pr, commit=commit,
             build=build, branch=branch),
         files=files)
+    if response.status_code != 200:
+        print('Failed with status.')
+        return response.status_code
+    print('Done.')
+    return 0
 
 
 def main():
