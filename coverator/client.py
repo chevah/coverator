@@ -12,7 +12,7 @@ def upload_coverage(
         filepath, repository=None, build=None, commit=None,
         branch=None, pr=None, url=DEFAULT_URL):
     files = {'file': open(filepath)}
-    print('Uploading coverage data file')
+    print('Uploading coverage data file to %s.' % url)
     response = requests.post(
         url,
         data=dict(
@@ -20,7 +20,7 @@ def upload_coverage(
             build=build, branch=branch),
         files=files)
     if response.status_code != 200:
-        print('Failed with status.')
+        print('Failed to upload.')
         return response.status_code
     print('Done.')
     return 0
