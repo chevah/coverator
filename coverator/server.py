@@ -290,13 +290,13 @@ class ReportGenerator(Thread):
                             os.path.dirname(coverage_file))
                     shutil.rmtree(tempdir)
                 self.queue.task_done()
-            except:
+            except Exception:
                 print('Exception in thread:', sys.exc_info()[0])
 
 
 def main():  # pragma: no cover
     parser = argparse.ArgumentParser(
-        prog='chevah-coverage-server', add_help=True,
+        prog='coverator-server', add_help=True,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Aggregates coverage data files and serves HTML report")
 

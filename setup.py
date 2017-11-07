@@ -29,7 +29,7 @@ class PublishCommand(Command):
 
 
 distribution = setup(
-    name='chevah-coverage',
+    name='coverator',
     version=VERSION,
     maintainer='Adi Roiban',
     maintainer_email='adi.roiban@chevah.com',
@@ -38,7 +38,6 @@ distribution = setup(
     description="codecov.io like tool for aggregating and publishing coverage reports.",
     long_description="",
     url='http://www.chevah.com',
-    namespace_packages=['chevah'],
     packages=find_packages('.'),
     install_requires=[
         'coverage==4.4.1',
@@ -56,11 +55,11 @@ distribution = setup(
     },
     entry_points={
         'console_scripts': [
-            'chevah-coverage-server = chevah.coverage.server:main',
-            'chevah-coverage = chevah.coverage.client:main',
+            'coverator-server = coverator.server:main',
+            'coverator-publish = coverator.client:main',
             ],
         },
-    test_suite = 'chevah.coverage.tests',
+    test_suite = 'coverator.tests',
     cmdclass={
          'publish': PublishCommand,
          },

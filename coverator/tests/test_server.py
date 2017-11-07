@@ -1,6 +1,4 @@
-# from mock import Mock
-
-from chevah.coverage.server import (
+from coverator.server import (
     ChevahCoverageHandler,
     ReportGenerator,
     SetQueue,

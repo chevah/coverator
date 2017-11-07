@@ -28,9 +28,9 @@ def upload_coverage(
 
 def main():
     parser = argparse.ArgumentParser(
-        prog='chevah-coverage', add_help=True,
+        prog='coverator-publish', add_help=True,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Upload reports to a Chevah Coverage server")
+        epilog="Upload reports to a coverator server")
 
     parser.add_argument(
         'url',
@@ -43,7 +43,7 @@ def main():
     parser.add_argument(
         '--repository',
         default=None,
-        help='Specify the github repository (e.g. chevah/chevah-coverage)')
+        help='Specify the github repository (e.g. chevah/coverator)')
     parser.add_argument(
         '--commit',
         default=None,

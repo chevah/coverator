@@ -1,5 +1,5 @@
-chevah-coverage
-===============
+coverator
+=========
 
 The aim of this project is to provide an alternative to codecov's features.
 
@@ -21,7 +21,7 @@ Server
 First edit the config file (`config.ini`) setting the path where all coverage
 files will be stored, then run::
 
-  $ build/bin/chevah-coverage-server config.ini
+  $ build/bin/coverator-server config.ini
 
 Whenever you upload enough files (see the `min_buildslaves` configuration)
 to the server you can see the reports by accessing `http://localhost:8080/`.
@@ -39,9 +39,9 @@ You can generate a coverage file by running::
 
 Then to upload a coverage file run the command::
 
-  $ build/bin/chevah-coverage --file .coverage http://localhost:8080/
+  $ build/bin/coverator-publish --file .coverage http://localhost:8080/
 
 You can specify the `commit`, the buildslave name, branch name and
 pull request ID. To check all command line options run::
 
-  $ build/bin/chevah-coverage -h
+  $ build/bin/coverator-publish -h

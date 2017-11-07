@@ -13,11 +13,11 @@ build: env
 	@build/bin/pip install .
 
 lint: develop
-	@build/bin/pyflakes chevah/
-	@build/bin/pycodestyle chevah/
+	@build/bin/pyflakes coverator/
+	@build/bin/pycodestyle coverator/
 
 test: lint
 	@build/bin/python setup.py test
 
 test_with_coverage: lint
-	@build/bin/nosetests --with-coverage --cover-package=chevah --cover-tests
+	@build/bin/nosetests --with-coverage --cover-package=coverator --cover-tests
