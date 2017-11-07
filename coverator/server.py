@@ -47,7 +47,7 @@ class SetQueue(Queue):
         return self.queue.pop()
 
 
-class ChevahCoverageHandler(SimpleHTTPRequestHandler):
+class CoveratorHandler(SimpleHTTPRequestHandler):
     """
     Implements an HTTPRequestHandler that will receive coverage data files,
     combine them by commit and generate HTML reports.
@@ -165,8 +165,9 @@ class ReportGenerator(Thread):
     # This is here to help with testing
     github_base_url = 'http://github.com'
 
-    def __init__(self, github_token=None):
+    def __init__(self, github_token=None, url=None):
         self.queue = Queue()
+        self.url = url
         self.github = None
         if github_token:
             self.github = Github(github_token)
@@ -206,8 +207,8 @@ class ReportGenerator(Thread):
                 repo_url).get_commit(commit)
 
         for coverage_status in [
-                ('', 'coverage/project', coverage_total),
-                ('/diff-cover.html', 'coverage/project/diff', coverage_diff)]:
+                ('', 'coverator/project', coverage_total),
+                ('/diff-cover.html', 'coverator/project/diff', coverage_diff)]:
             # Get the report result for each context, the tuple format is
             # (report_url, report_context, report_percentage)
             status = 'pending'
@@ -220,8 +221,8 @@ class ReportGenerator(Thread):
 
             github_commit.create_status(
                 status,
-                'http://172.20.245.1:8080/%s/commit/%s%s' % (
-                    repo, commit, coverage_status[0]),
+                '%s/%s/commit/%s%s' % (
+                    self.url, repo, commit, coverage_status[0]),
                 status_msg,
                 coverage_status[1])
 
@@ -311,23 +312,26 @@ def main():  # pragma: no cover
     config.read(args.config)
 
     github_token = config.get('server', 'github_token')
+    coverator_url = config.get('server', 'coverator_url')
     path = config.get('server', 'path')
 
-    ChevahCoverageHandler.PATH = os.path.abspath(path)
-    ChevahCoverageHandler.MINIMUM_FILES = config.getint(
+    CoveratorHandler.PATH = os.path.abspath(path)
+    CoveratorHandler.MINIMUM_FILES = config.getint(
         'server', 'min_buildslaves')
-    ChevahCoverageHandler.report_generator = ReportGenerator(github_token)
-    ChevahCoverageHandler.report_generator.start()
+
+    CoveratorHandler.report_generator = ReportGenerator(
+        github_token, coverator_url)
+    CoveratorHandler.report_generator.start()
 
     server = HTTPServer(
         ('', config.getint('server', 'port')),
-        ChevahCoverageHandler)
+        CoveratorHandler)
 
     try:
         server.serve_forever()
     finally:
         # Stops the report generator thread
-        ChevahCoverageHandler.report_generator.queue.put(None)
+        CoveratorHandler.report_generator.queue.put(None)
 
 
 if __name__ == '__main__':  # pragma: no cover

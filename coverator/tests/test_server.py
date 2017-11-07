@@ -1,5 +1,5 @@
 from coverator.server import (
-    ChevahCoverageHandler,
+    CoveratorHandler,
     ReportGenerator,
     SetQueue,
     )
@@ -12,13 +12,13 @@ import tempfile
 import shutil
 
 
-class TestChevahCoverageHandler(BaseTestCase):
+class TestCoveratorHandler(BaseTestCase):
     """
-    Tests for ChevahCoverageHandler.
+    Tests for CoveratorHandler.
 
     Following the patterns from test.test_httpservers from stdlib.
     """
-    class request_handler(NoLogRequestHandler, ChevahCoverageHandler):
+    class request_handler(NoLogRequestHandler, CoveratorHandler):
         pass
 
     def setUp(self):
@@ -280,13 +280,13 @@ class TestChevahCoverageHandler(BaseTestCase):
         Will use the configurable class variable PATH when translating
         URL paths.
         """
-        class NoRequestChevahCoverageHandler(ChevahCoverageHandler):
+        class NoRequestCoveratorHandler(CoveratorHandler):
             PATH = '/a/generic/path'
 
             def __init__(self):
                 pass
 
-        sut = NoRequestChevahCoverageHandler()
+        sut = NoRequestCoveratorHandler()
         result = sut.translate_path('/test/')
         self.assertEqual(u'/a/generic/path/test/', result)
 
