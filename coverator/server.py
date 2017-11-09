@@ -277,7 +277,7 @@ class ReportGenerator(Thread):
 
                 # This check is here to help with testing
                 if self.github_base_url is not None:  # pragma: no cover
-                    self.notifyGithub(repo, commit)
+                    # self.notifyGithub(repo, commit)
                     self.cloneGitRepo(repo, git_repo_path, commit)
 
                 old_path = os.getcwd()
@@ -300,22 +300,24 @@ class ReportGenerator(Thread):
 
                     # Generate aggregated XML and HTML reports.
                     c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
-                    coverage_total = c.html_report(directory=path)
+                    c.html_report(directory=path)
+
+                    # coverage_total = c.html_report(directory=path)
 
                     if self.github is not None:  # pragma: no cover
-                        # Generate also the diff-coverage report.
-                        from diff_cover.tool import generate_coverage_report
-                        from diff_cover.git_path import GitPathTool
-                        GitPathTool.set_cwd(os.getcwd())
-                        coverage_diff = generate_coverage_report(
-                            [os.path.join(path, 'coverage.xml')],
-                            'master',
-                            os.path.join(path, 'diff-cover.html'))
-                        self.notifyGithub(
-                            repo, commit, coverage_total, coverage_diff)
+                        # # Generate also the diff-coverage report.
+                        # from diff_cover.tool import generate_coverage_report
+                        # from diff_cover.git_path import GitPathTool
+                        # GitPathTool.set_cwd(os.getcwd())
+                        # coverage_diff = generate_coverage_report(
+                        #     [os.path.join(path, 'coverage.xml')],
+                        #     'master',
+                        #     os.path.join(path, 'diff-cover.html'))
+                        # self.notifyGithub(
+                        #     repo, commit, coverage_total, coverage_diff)
 
-                    if os.environ.get('CODECOV_TOKEN', None):
-                        self.publishToCodecov(commit, branch, pr)
+                        if os.environ.get('CODECOV_TOKEN', None):
+                            self.publishToCodecov(commit, branch, pr)
 
                 finally:
                     os.chdir(old_path)
