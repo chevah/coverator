@@ -118,7 +118,10 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
             coverage_files = glob.glob(os.path.join(
                 path, '%s*' % COVERAGE_DATA_PREFIX))
             if len(coverage_files) > self.MINIMUM_FILES:
-                self.report_generator.queue.put((self.PATH, repo, commit))
+                branch = form.getvalue('branch', None)
+                pr = form.getvalue('pr', None)
+                self.report_generator.queue.put(
+                    (self.PATH, repo, commit, branch, pr))
 
         response = '{success:true}'
         self.send_response(200)
@@ -206,25 +209,54 @@ class ReportGenerator(Thread):
         github_commit = self.github.get_repo(
                 repo_url).get_commit(commit)
 
-        for coverage_status in [
-                ('', 'coverator/project', coverage_total),
-                ('/diff-cover.html', 'coverator/project/diff', coverage_diff)]:
-            # Get the report result for each context, the tuple format is
-            # (report_url, report_context, report_percentage)
-            status = 'pending'
-            status_msg = 'Waiting for status to be reported'
-            if coverage_status[2] is not None:
-                status = 'success'
-                if coverage_status[2] < 100:
-                    status = 'failure'
-                status_msg = 'Coverage is %d%%' % coverage_status[2]
+        status_total = 'pending'
+        status_total_msg = 'Waiting for status to be reported'
 
-            github_commit.create_status(
-                status,
-                '%s/%s/commit/%s%s' % (
-                    self.url, repo, commit, coverage_status[0]),
-                status_msg,
-                coverage_status[1])
+        if coverage_total is not None:
+            status_total = 'failure'
+            status_diff_msg = 'Coverage is %f%% <%f%%>' % (coverage_total, -10)
+        github_commit.create_status(
+                status_total,
+                '%s/%s/commit/%s' % (
+                    self.url, repo, commit),
+                status_total_msg,
+                'coverator/project')
+
+        status_diff = 'pending'
+        status_diff_msg = 'Waiting for status to be reported'
+
+        if coverage_diff is not None:
+            status_diff = 'failure'
+            status_diff_msg = 'Coverage diff is %f%%' % coverage_diff
+            if coverage_diff == 100:
+                status_diff = 'success'
+
+        github_commit.create_status(
+                status_diff,
+                '%s/%s/commit/%s/diff-cover.html' % (
+                    self.url, repo, commit),
+                status_diff_msg,
+                'coverator/project/diff')
+
+    def publishToCodecov(self, branch, pr):
+        from pkg_resources import load_entry_point as lep
+        codecov_main = lep('codecov', 'console_scripts', 'codecov')
+
+        sys.argv = [
+            'codecov',
+            '--build', 'coverator',
+            '--file', 'coverage.xml',
+            ]
+
+        if branch:
+            # We know the branch name from the env.
+            sys.argv.extend(['--branch', branch])
+
+        if pr:
+            # We are publishing for a PR.
+            sys.argv.extend(['--pr', pr])
+
+        codecov_main()
 
     def run(self):
         """
@@ -237,7 +269,7 @@ class ReportGenerator(Thread):
                     # Means there is nothing else to consume.
                     break
 
-                root, repo, commit = value
+                root, repo, commit, branch, pr = value
 
                 # The path to save the reports
                 path = os.path.join(root, repo, 'commit', commit)
@@ -281,6 +313,10 @@ class ReportGenerator(Thread):
                             os.path.join(path, 'diff-cover.html'))
                         self.notifyGithub(
                             repo, commit, coverage_total, coverage_diff)
+
+                    if os.environ.get('CODECOV_TOKEN', None):
+                        self.publishToCodecov(branch, pr)
+
                 finally:
                     os.chdir(old_path)
                     # Restore files removed by coverage.
