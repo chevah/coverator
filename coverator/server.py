@@ -238,14 +238,14 @@ class ReportGenerator(Thread):
                 status_diff_msg,
                 'coverator/project/diff')
 
-    def publishToCodecov(self, branch, pr):
+    def publishToCodecov(self, commit, branch, pr):
         from pkg_resources import load_entry_point as lep
         codecov_main = lep('codecov', 'console_scripts', 'codecov')
 
         sys.argv = [
             'codecov',
             '--build', 'coverator',
-            '--file', 'coverage.xml',
+            '--file', '../commit/%s/coverage.xml' % commit,
             ]
 
         if branch:
@@ -315,7 +315,7 @@ class ReportGenerator(Thread):
                             repo, commit, coverage_total, coverage_diff)
 
                     if os.environ.get('CODECOV_TOKEN', None):
-                        self.publishToCodecov(branch, pr)
+                        self.publishToCodecov(commit, branch, pr)
 
                 finally:
                     os.chdir(old_path)
