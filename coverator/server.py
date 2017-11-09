@@ -168,9 +168,10 @@ class ReportGenerator(Thread):
     # This is here to help with testing
     github_base_url = 'http://github.com'
 
-    def __init__(self, github_token=None, url=None):
+    def __init__(self, github_token=None, url=None, codecov_tokens={}):
         self.queue = Queue()
         self.url = url
+        self.codecov_tokens = codecov_tokens
         self.github = None
         if github_token:
             self.github = Github(github_token)
@@ -238,7 +239,7 @@ class ReportGenerator(Thread):
                 status_diff_msg,
                 'coverator/project/diff')
 
-    def publishToCodecov(self, commit, branch, pr):
+    def publishToCodecov(self, token, commit, branch, pr):
         from pkg_resources import load_entry_point as lep
         codecov_main = lep('codecov', 'console_scripts', 'codecov')
 
@@ -246,6 +247,7 @@ class ReportGenerator(Thread):
             'codecov',
             '--build', 'coverator',
             '--file', '../commit/%s/coverage.xml' % commit,
+            '-t', token,
             ]
 
         if branch:
@@ -316,8 +318,10 @@ class ReportGenerator(Thread):
                         # self.notifyGithub(
                         #     repo, commit, coverage_total, coverage_diff)
 
-                        if os.environ.get('CODECOV_TOKEN', None):
-                            self.publishToCodecov(commit, branch, pr)
+                        codecov_token = self.codecov_tokens.get(repo, None)
+                        if codecov_token:
+                            self.publishToCodecov(
+                                codecov_token, commit, branch, pr)
 
                 finally:
                     os.chdir(old_path)
@@ -351,6 +355,13 @@ def main():  # pragma: no cover
 
     github_token = config.get('server', 'github_token')
     coverator_url = config.get('server', 'coverator_url')
+    codecov_tokens_cfg = config.get('server', 'codecov_tokens')
+
+    codecov_tokens = {}
+    for token in codecov_tokens_cfg.split(','):
+        repo, tok = token.split(':')
+        codecov_tokens[repo.strip()] = tok.strip()
+
     path = config.get('server', 'path')
 
     CoveratorHandler.PATH = os.path.abspath(path)
@@ -358,7 +369,7 @@ def main():  # pragma: no cover
         'server', 'min_buildslaves')
 
     CoveratorHandler.report_generator = ReportGenerator(
-        github_token, coverator_url)
+        github_token, coverator_url, codecov_tokens)
     CoveratorHandler.report_generator.start()
 
     server = HTTPServer(
