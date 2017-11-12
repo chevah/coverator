@@ -166,15 +166,19 @@ class ReportGenerator(Thread):
     """
 
     # This is here to help with testing
-    github_base_url = 'http://github.com'
+    github_base_url = 'https://github.com'
 
     def __init__(self, github_token=None, url=None, codecov_tokens={}):
         self.queue = Queue()
         self.url = url
         self.codecov_tokens = codecov_tokens
         self.github = None
+        self.github_token = None
+
         if github_token:
+            self.github_base_url = 'https://%s@github.com' % github_token
             self.github = Github(github_token)
+
         super(ReportGenerator, self).__init__()
 
     def cloneGitRepo(self, repo, path, commit):
@@ -182,7 +186,7 @@ class ReportGenerator(Thread):
         Clone a repository `repo` from github into `path` and
         checkout the revision `commit`.
         """
-        # First we check if we have already cloned this repository,
+        # Check if we have already cloned this repository,
         # if not, we clone it from github.
         if not os.path.exists(path):
             git_repo = Repo.clone_from(
