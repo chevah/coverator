@@ -306,8 +306,9 @@ class ReportGenerator(Thread):
 
                     # Generate aggregated XML and HTML reports.
                     c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
-                    c.html_report(directory=path)
 
+                    # HTML and Diff html reports are commented since we are still
+                    # relying on codecov.io for it.
                     # coverage_total = c.html_report(directory=path)
 
                     if self.github is not None:  # pragma: no cover
