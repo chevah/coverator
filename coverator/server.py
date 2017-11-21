@@ -288,6 +288,7 @@ class ReportGenerator(Process):
                 value = self.queue.get()
                 if value is None:
                     # Means there is nothing else to consume.
+                    self.log_message('Nothing to consume, exiting process.')
                     break
                 self.log_message('New value from queue: %s', value)
                 root, repo, commit, branch, pr = value
