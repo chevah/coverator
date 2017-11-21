@@ -4,47 +4,23 @@ from BaseHTTPServer import HTTPServer
 from ConfigParser import SafeConfigParser
 from git import Repo
 from github import Github
-from Queue import Queue
+from multiprocessing import Queue, Process
 from SimpleHTTPServer import SimpleHTTPRequestHandler
-from threading import Thread
 
 import argparse
 import cgi
-import coverage
+# import coverage
 import glob
 import os
 import posixpath
 import shutil
 import sys
 import tempfile
+import time
 import urllib
 
 
 COVERAGE_DATA_PREFIX = 'coverage.data.'
-
-
-class SetQueue(Queue):
-    """
-    Implements a queue that ignores repeated values by using a set
-    to store the elements.
-    """
-    def _init(self, maxsize):
-        """
-        See: Queue.Queue
-        """
-        self.queue = set()
-
-    def _put(self, item):
-        """
-        See: Queue.Queue
-        """
-        self.queue.add(item)
-
-    def _get(self):
-        """
-        See: Queue.Queue
-        """
-        return self.queue.pop()
 
 
 class CoveratorHandler(SimpleHTTPRequestHandler):
@@ -73,6 +49,7 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
 
         if 'file' in form:
             if not os.path.exists(self.PATH):  # pragma: no cover
+                self.log_message('Creating dir: %s.', self.PATH)
                 os.mkdir(self.PATH)
 
             repo = form.getvalue('repository', None)
@@ -83,6 +60,7 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
             repository_path = os.path.join(self.PATH, repo)
 
             if not os.path.exists(repository_path):
+                self.log_message('Creating dir: %s.', repository_path)
                 os.makedirs(repository_path)
 
             for dir_name in ('commit', 'branch', 'pr'):
@@ -98,9 +76,14 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
             if not os.path.exists(path):
                 os.mkdir(path)
 
-            open(os.path.join(path, '%s%s' % (
-                    COVERAGE_DATA_PREFIX, build)), 'wb').write(
-                    coverage_file.read())
+            self.log_message('Writing coverage file: (%s,%s)', build, commit)
+
+            f = open(os.path.join(path, '%s%s' % (
+                    COVERAGE_DATA_PREFIX, build)), 'wb')
+            f.write(coverage_file.read())
+            f.close()
+
+            self.log_message('Done.')
 
             for key in ('branch', 'pr'):
                 # Check if we are setting a branch and/or a PR and update
@@ -111,6 +94,8 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
                         value + os.linesep)
                     link_path = os.path.join(
                         repository_path, '%s' % key, value)
+                    self.log_message(
+                        'Updating symlink for %s -> %s', link_path, path)
                     if os.path.exists(link_path):
                         os.unlink(link_path)
                     os.symlink(path, link_path)
@@ -118,17 +103,20 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
             coverage_files = glob.glob(os.path.join(
                 path, '%s*' % COVERAGE_DATA_PREFIX))
             if len(coverage_files) > self.MINIMUM_FILES:
+                self.log_message('Adding %s to the queue', commit)
                 branch = form.getvalue('branch', None)
                 pr = form.getvalue('pr', None)
                 self.report_generator.queue.put(
                     (self.PATH, repo, commit, branch, pr))
 
+        self.log_message('Writing response.')
         response = '{success:true}'
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.send_header("Content-length", len(response))
         self.end_headers()
         self.wfile.write(response)
+        self.log_message('Response written.')
 
     def translate_path(self, path):
         """
@@ -160,15 +148,16 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
         return path
 
 
-class ReportGenerator(Thread):
+class ReportGenerator(Process):
     """
-    Consumer thread for generating reports without blocking the HTTP server.
+    Consumer process for generating reports without blocking the HTTP server.
     """
 
     # This is here to help with testing
     github_base_url = 'https://github.com'
 
-    def __init__(self, github_token=None, url=None, codecov_tokens={}):
+    def __init__(
+            self, github_token=None, url=None, codecov_tokens={}):
         self.queue = Queue()
         self.url = url
         self.codecov_tokens = codecov_tokens
@@ -181,6 +170,26 @@ class ReportGenerator(Thread):
 
         super(ReportGenerator, self).__init__()
 
+    def log_message(self, format, *args):
+        sys.stderr.write(
+            "consumer_process - - [%s] %s\n" % (
+                self.log_date_time_string(),
+                format % args))
+
+    def log_date_time_string(self):
+        """Return the current time formatted for logging."""
+        now = time.time()
+        year, month, day, hh, mm, ss, x, y, z = time.localtime(now)
+        s = "%02d/%3s/%04d %02d:%02d:%02d" % (
+                day, self.monthname[month], year, hh, mm, ss)
+        return s
+
+    weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    monthname = [None,
+                 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
     def cloneGitRepo(self, repo, path, commit):
         """
         Clone a repository `repo` from github into `path` and
@@ -189,16 +198,22 @@ class ReportGenerator(Thread):
         # Check if we have already cloned this repository,
         # if not, we clone it from github.
         if not os.path.exists(path):
+            self.log_message(
+                'Cloning git repository %s/%s to %s',
+                self.github_base_url, repo, path)
             git_repo = Repo.clone_from(
                 '%s/%s' % (self.github_base_url, repo), path)
         else:
+            self.log_message('Checking out master branch in %s', path)
             git_repo = Repo(path)
             git_repo.head.reference = git_repo.refs['master']
             git_repo.head.reset(index=True, working_tree=True)
 
+        self.log_message('Git pull')
         git_repo.remote().pull()
 
         # Checkout the commit
+        self.log_message('Checking out commit: %s', commit)
         git_commit = git_repo.commit(commit)
         git_repo.head.reference = git_commit
         git_repo.head.reset(index=True, working_tree=True)
@@ -274,7 +289,7 @@ class ReportGenerator(Thread):
                 if value is None:
                     # Means there is nothing else to consume.
                     break
-
+                self.log_message('New value from queue: %s', value)
                 root, repo, commit, branch, pr = value
 
                 # The path to save the reports
@@ -295,20 +310,75 @@ class ReportGenerator(Thread):
                     tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
                     coverage_files = glob.glob(
                         os.path.join(path, '%s*' % COVERAGE_DATA_PREFIX))
+                    self.log_message('Copying files to %s', tempdir)
                     for coverage_file in coverage_files:
                         shutil.copy(coverage_file, tempdir)
 
-                    # Move to the cloned repo and prepare for the reports
                     os.chdir(os.path.join(git_repo_path))
-                    c = coverage.Coverage(data_file=os.path.join(
-                        path, COVERAGE_DATA_PREFIX[:-1]))
-                    c.combine(data_paths=[path], strict=True)
 
-                    # Generate aggregated XML and HTML reports.
-                    c.xml_report(outfile=os.path.join(path, 'coverage.xml'))
+                    # Move to the cloned repo and prepare for the reports
+                    self.log_message('Starting to combine coverage files...')
+                    combined_coverage_file = os.path.join(
+                        path, COVERAGE_DATA_PREFIX[:-1])
 
-                    # HTML and Diff html reports are commented since we are still
-                    # relying on codecov.io for it.
+                    from subprocess import call
+                    env = os.environ.copy()
+                    env['COVERAGE_FILE'] = combined_coverage_file
+
+                    # FIXME:4516:
+                    # We call coverage combine three times, one for non-windows
+                    # generated files, one for windows generated files and
+                    # one for combine the two calls.
+                    self.log_message('Combining non-windows files.')
+                    args = ['coverage', 'combine']
+                    call(args + [
+                        f for f in glob.glob('%s/*' % tempdir)
+                        if 'win' not in f
+                        ], env=env)
+
+                    self.log_message('Combining windows files.')
+                    env['COVERAGE_FILE'] = '%s.win' % combined_coverage_file
+                    call(args + [
+                        f for f in glob.glob('%s/*win*' % tempdir)
+                        ], env=env)
+
+                    # Manually replace the windows path for linux path
+                    windows_file = open('%s.win' % combined_coverage_file)
+                    content = windows_file.read()
+                    windows_file.close()
+                    new_content = content.replace('\\\\', '/')
+                    windows_file = open('%s.win' % combined_coverage_file, 'w')
+                    windows_file.write(new_content)
+                    windows_file.close()
+
+                    self.log_message('Merging windows and non-windows files.')
+                    env['COVERAGE_FILE'] = combined_coverage_file
+                    call([
+                        'coverage',
+                        'combine',
+                        '-a',
+                        '%s.win' % combined_coverage_file
+                        ], env=env)
+
+                    shutil.rmtree(tempdir)
+
+                    self.log_message('Files combined, generating xml report.')
+                    call([
+                        'coverage',
+                        'xml',
+                        '-o',
+                        os.path.join(path, 'coverage.xml'),
+                        ], env=env)
+
+                    # Delete the data file after the xml file is generated.
+                    os.remove(combined_coverage_file)
+
+                    self.log_message(
+                        'XML file created at %s',
+                        os.path.join(path, 'coverage.xml'))
+
+                    # HTML and Diff html reports are commented since we are
+                    # still relying on codecov.io for it.
                     # coverage_total = c.html_report(directory=path)
 
                     if self.github is not None:  # pragma: no cover
@@ -325,21 +395,19 @@ class ReportGenerator(Thread):
 
                         codecov_token = self.codecov_tokens.get(repo, None)
                         if codecov_token:
+                            self.log_message('Publishing to codecov.io')
                             self.publishToCodecov(
                                 codecov_token, commit, branch, pr)
 
                 finally:
                     os.chdir(old_path)
-                    # Restore files removed by coverage.
-                    for coverage_file in coverage_files:
-                        shutil.copy(
-                            os.path.join(
-                                tempdir, os.path.basename(coverage_file)),
-                            os.path.dirname(coverage_file))
-                    shutil.rmtree(tempdir)
-                self.queue.task_done()
+            except KeyboardInterrupt:
+                self.log_message('Exiting consumer process.')
+                break
             except Exception:
-                print('Exception in thread:', sys.exc_info()[0])
+                print('Exception in consumer process:', sys.exc_info())
+            finally:
+                self.log_message('Queue task done.')
 
 
 def main():  # pragma: no cover
@@ -383,8 +451,10 @@ def main():  # pragma: no cover
 
     try:
         server.serve_forever()
+    except KeyboardInterrupt:
+        pass
     finally:
-        # Stops the report generator thread
+        # Stops the report generator process
         CoveratorHandler.report_generator.queue.put(None)
 
 

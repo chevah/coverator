@@ -10,15 +10,16 @@ DEFAULT_URL = 'http://coverage.chevah.com:8080'
 
 def upload_coverage(
         filepath, repository=None, build=None, commit=None,
-        branch=None, pr=None, url=DEFAULT_URL):
+        branch=None, pr=None, url=DEFAULT_URL, timeout=30):
     files = {'file': open(filepath)}
-    print('Uploading coverage data file to %s.' % url)
+    print('Uploading coverage data file to %s...' % url)
     response = requests.post(
         url,
         data=dict(
             repository=repository, pr=pr, commit=commit,
             build=build, branch=branch),
-        files=files)
+        files=files,
+        timeout=timeout)
     if response.status_code != 200:
         print('Failed to upload.')
         return response.status_code
@@ -63,10 +64,10 @@ def main():
 
     args = parser.parse_args(sys.argv[1:])
 
-    upload_coverage(
+    return upload_coverage(
         args.file, args.repository, args.build,
         args.commit, args.branch, args.pr, args.url)
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
