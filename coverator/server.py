@@ -229,25 +229,23 @@ class ReportGenerator(Process):
         github_commit = self.github.get_repo(
                 repo_url).get_commit(commit)
 
-        status_total = 'pending'
-        status_total_msg = 'Waiting for status to be reported'
-
-        if coverage_total is not None:
-            status_total = 'failure'
-            status_diff_msg = 'Coverage is %f%% <%f%%>' % (coverage_total, -10)
-        github_commit.create_status(
-                status_total,
-                '%s/%s/commit/%s' % (
-                    self.url, repo, commit),
-                status_total_msg,
-                'coverator/project')
+        # status_total = 'pending'
+        # status_total_msg = 'Waiting for status to be reported'
+        # if coverage_total is not None:
+        #     status_total = 'failure'
+        #     status_diff_msg = 'Coverage is %f%% <%f%%>' % (coverage_total, -10)
+        # github_commit.create_status(
+        #         status_total,
+        #         '%s/%s/commit/%s' % (
+        #             self.url, repo, commit),
+        #         status_total_msg,
+        #         'coverator/project')
 
         status_diff = 'pending'
         status_diff_msg = 'Waiting for status to be reported'
-
         if coverage_diff is not None:
             status_diff = 'failure'
-            status_diff_msg = 'Coverage diff is %f%%' % coverage_diff
+            status_diff_msg = 'Coverage diff is %.2f%%' % coverage_diff
             if coverage_diff == 100:
                 status_diff = 'success'
 
@@ -383,16 +381,18 @@ class ReportGenerator(Process):
                     # coverage_total = c.html_report(directory=path)
 
                     if self.github is not None:  # pragma: no cover
-                        # # Generate also the diff-coverage report.
-                        # from diff_cover.tool import generate_coverage_report
-                        # from diff_cover.git_path import GitPathTool
-                        # GitPathTool.set_cwd(os.getcwd())
-                        # coverage_diff = generate_coverage_report(
-                        #     [os.path.join(path, 'coverage.xml')],
-                        #     'master',
-                        #     os.path.join(path, 'diff-cover.html'))
-                        # self.notifyGithub(
-                        #     repo, commit, coverage_total, coverage_diff)
+                        # Generate the diff-coverage report.
+                        from diff_cover.tool import generate_coverage_report
+                        from diff_cover.git_path import GitPathTool
+                        GitPathTool.set_cwd(os.getcwd())
+                        self.log_message('Generating diff-cover')
+                        coverage_diff = generate_coverage_report(
+                            [os.path.join(path, 'coverage.xml')],
+                            'master',
+                            os.path.join(path, 'diff-cover.html'))
+                        self.log_message('Diff-cover generated, now notifying github.')
+                        self.notifyGithub(
+                            repo, commit, None, coverage_diff)
 
                         codecov_token = self.codecov_tokens.get(repo, None)
                         if codecov_token:
