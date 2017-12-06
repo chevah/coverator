@@ -11,8 +11,20 @@ DEFAULT_URL = 'http://coverage.chevah.com:8080'
 def upload_coverage(
         filepath, repository=None, build=None, commit=None,
         branch=None, pr=None, url=DEFAULT_URL, timeout=30):
+    """
+    Sends a POST request uploading a coverage data file to a coverator server.
+    """
     files = {'file': open(filepath)}
-    print('Uploading coverage data file to %s...' % url)
+    print('Uploading coverage data file with the following configuration:')
+    print('FILE: %s' % filepath)
+    print('REPOSITORY: %s' % repository)
+    print('BUILDER: %s' % build)
+    print('COMMIT: %s' % commit)
+    print('BRANCH: %s' % branch)
+    print('GITHUB_PR: %s' % pr)
+    print('URL: %s' % url)
+    print('TIMEOUT: %s' % timeout)
+
     response = requests.post(
         url,
         data=dict(
@@ -21,7 +33,7 @@ def upload_coverage(
         files=files,
         timeout=timeout)
     if response.status_code != 200:
-        print('Failed to upload.')
+        print('Failed to upload, response code was %d.' % response.status_code)
         return response.status_code
     print('Done.')
     return 0
