@@ -1,10 +1,9 @@
-from coverator.server import (
-    CoveratorHandler,
-    ReportGenerator,
-    )
-from test.test_httpservers import BaseTestCase, NoLogRequestHandler
-from requests import Request
+from coverator.server import CoveratorHandler
+from multiprocessing import Queue
 from os import path as osp
+from requests import Request
+from test.test_httpservers import BaseTestCase, NoLogRequestHandler
+
 import os
 import tempfile
 import shutil
@@ -25,7 +24,7 @@ class TestCoveratorHandler(BaseTestCase):
         """
         BaseTestCase.setUp(self)
         basetempdir = tempfile.gettempdir()
-        self.tempdir = tempfile.mkdtemp(dir=basetempdir)
+        self.tempdir = tempfile.mktemp(dir=basetempdir)
         self.request_handler.PATH = self.tempdir
         self.request_handler.MINIMUM_FILES = 2
         self.datadir = osp.join(
@@ -212,42 +211,24 @@ class TestCoveratorHandler(BaseTestCase):
 
     def test_post_combine_after_minimum_files(self):
         """
-        Will combine the coverage data files and generate an HTML report
+        Will add to the queue to be processed by the consumer process
         after a minimum number of files from different slaves have been
         uploaded.
         """
-        # Starts the report generator thread.
-        self.request_handler.report_generator = ReportGenerator()
-        self.request_handler.report_generator.github_base_url = None
-        self.request_handler.report_generator.start()
+        queue = Queue()
 
-        # Create a fake GitHub repository
-        repo_name = 'test/repo'
-        repo_path = osp.join(self.tempdir, repo_name)
-        git_repo_path = osp.join(repo_path, 'git-repo')
-        os.makedirs(osp.join(git_repo_path, 'test'))
-        import git
-        import copy
-        os.environ.copy = lambda: copy.deepcopy(os.environ)
-        r = git.Repo.init(git_repo_path)
-        shutil.copy(
-            osp.join(self.datadir, 'coveragerc'),
-            osp.join(git_repo_path, '.coveragerc'))
-        shutil.copy(
-            osp.join(self.datadir, 'test', 'file.py'),
-            osp.join(git_repo_path, 'test', 'file.py'))
-        shutil.copy(
-            osp.join(self.datadir, 'test', '__init__.py'),
-            osp.join(git_repo_path, 'test', '__init__.py'))
+        class MockReportGenerator:
+            def __init__(self):
+                self.queue = queue
 
-        r.index.add([
-            osp.join(git_repo_path, '.coveragerc'),
-            osp.join(git_repo_path, 'test/file.py'),
-            osp.join(git_repo_path, 'test/__init__.py'),
-            ])
-        r.index.commit("simple commit")
-        commit = r.refs['master'].commit.hexsha
-        commit_path = osp.join(repo_path, 'commit', commit)
+        self.request_handler.report_generator = MockReportGenerator()
+
+        commit_path = osp.join(
+            self.tempdir,
+            'test',
+            'repository',
+            'commit',
+            '0f3adff9d8f6a72c919822b8cde073a9e20505e0')
 
         for i, slave in enumerate(['slave1', 'slave2', 'slave3']):
             response = self.request(
@@ -256,8 +237,10 @@ class TestCoveratorHandler(BaseTestCase):
                     'coverage_%d' % i))},
                 data={
                     'build': slave,
-                    'repository': repo_name,
-                    'commit': commit,
+                    'repository': 'test/repository',
+                    'commit': '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+                    'pr': '42',
+                    'branch': 'test-branch',
                     },
                 )
 
@@ -267,8 +250,14 @@ class TestCoveratorHandler(BaseTestCase):
                     'coverage.data.%s' % slave)
             self.assertTrue(os.path.exists(slave_path))
 
-        # self.assertTrue(os.path.exists(
-        #     osp.join(commit_path, 'index.html')))
+        value = queue.get_nowait()
+
+        self.assertEquals((
+            self.request_handler.PATH,
+            'test/repository',
+            '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
+            'test-branch',
+            '42'), value)
 
     def test_translate_path(self):
         """

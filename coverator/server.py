@@ -10,7 +10,6 @@ from subprocess import call
 
 import argparse
 import cgi
-# import coverage
 import glob
 import os
 import posixpath
@@ -49,7 +48,7 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
                      })
 
         if 'file' in form:
-            if not os.path.exists(self.PATH):  # pragma: no cover
+            if not os.path.exists(self.PATH):
                 self.log_message('Creating dir: %s.', self.PATH)
                 os.mkdir(self.PATH)
 
@@ -138,7 +137,6 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
 
         # We use the configurable PATH variable instead of os.getcwd()
         path = self.PATH
-
         for word in words:
             if os.path.dirname(word) or word in (os.curdir, os.pardir):
                 # Ignore components that are not a simple file/directory name
@@ -317,7 +315,6 @@ class ReportGenerator(Process):
                     self.log_message('Starting to combine coverage files...')
                     combined_coverage_file = os.path.join(
                         path, COVERAGE_DATA_PREFIX[:-1])
-
                     env = os.environ.copy()
                     env['COVERAGE_FILE'] = combined_coverage_file
 
