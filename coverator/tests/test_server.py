@@ -1,9 +1,17 @@
-from coverator.server import CoveratorHandler
+from coverator.server import (
+    CoveratorHandler,
+    ReportGenerator,
+    )
+
+from github import Github
 from multiprocessing import Queue
 from os import path as osp
 from requests import Request
 from test.test_httpservers import BaseTestCase, NoLogRequestHandler
+from unittest import TestCase
 
+import copy
+import git
 import os
 import tempfile
 import shutil
@@ -31,9 +39,6 @@ class TestCoveratorHandler(BaseTestCase):
             os.path.dirname(os.path.realpath(__file__)), 'data')
 
     def tearDown(self):
-        if self.request_handler.report_generator:
-            # Stops the generator thread
-            self.request_handler.report_generator.queue.put(None)
         try:
             shutil.rmtree(self.tempdir)
         except OSError:
@@ -273,3 +278,105 @@ class TestCoveratorHandler(BaseTestCase):
         sut = NoRequestCoveratorHandler()
         result = sut.translate_path('/test/')
         self.assertEqual(u'/a/generic/path/test/', result)
+
+
+class TestReportGenerator(TestCase):
+    """
+    Unit tests for the ReportGenerator.
+    """
+    def setUp(self):
+        self.datadir = osp.join(
+            os.path.dirname(os.path.realpath(__file__)), 'data')
+        self.tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
+
+    def tearDown(self):
+        try:
+            shutil.rmtree(self.tempdir)
+        except OSError:
+            pass
+
+    def mkGitRepo(self, repo_name):
+        """
+        Creates a fake git repository.
+        """
+        repo_path = osp.join(self.tempdir, repo_name)
+        git_repo_path = osp.join(repo_path, 'git-repo')
+        os.makedirs(osp.join(git_repo_path, 'test'))
+        os.environ.copy = lambda: copy.deepcopy(os.environ)
+        r = git.Repo.init(git_repo_path)
+        shutil.copy(
+            osp.join(self.datadir, 'coveragerc'),
+            osp.join(git_repo_path, '.coveragerc'))
+        shutil.copy(
+            osp.join(self.datadir, 'test', 'file.py'),
+            osp.join(git_repo_path, 'test', 'file.py'))
+        shutil.copy(
+            osp.join(self.datadir, 'test', '__init__.py'),
+            osp.join(git_repo_path, 'test', '__init__.py'))
+
+        r.index.add([
+            osp.join(git_repo_path, '.coveragerc'),
+            osp.join(git_repo_path, 'test/file.py'),
+            osp.join(git_repo_path, 'test/__init__.py'),
+            ])
+        r.index.commit("simple commit")
+        commit = r.refs['master'].commit.hexsha
+        commit_path = osp.join(repo_path, 'commit', commit)
+        os.makedirs(commit_path)
+        shutil.copy(
+            osp.join(self.datadir, 'coverage_0'),
+            osp.join(commit_path, 'coverage.data.slave-0'))
+        shutil.copy(
+            osp.join(self.datadir, 'coverage_1'),
+            osp.join(commit_path, 'coverage.data.slave-1'))
+        shutil.copy(
+            osp.join(self.datadir, 'coverage_2'),
+            osp.join(commit_path, 'coverage.data.slave-2'))
+
+        return commit
+
+    def test_init(self):
+        """
+        Initialization values.
+        """
+        sut = ReportGenerator()
+        self.assertEquals(None, sut.github)
+        self.assertEquals('https://github.com', sut.github_base_url)
+        self.assertEquals({}, sut.codecov_tokens)
+        self.assertEquals(None, sut.url)
+
+    def test_init_github_token(self):
+        """
+        Initializing with a github token.
+        """
+        sut = ReportGenerator(
+            github_token='some-token',
+            url='http://testurl/')
+        self.assertIsInstance(sut.github, Github)
+        self.assertEquals('https://some-token@github.com', sut.github_base_url)
+        self.assertEquals({}, sut.codecov_tokens)
+        self.assertEquals('http://testurl/', sut.url)
+
+    def test_generate_report(self):
+        """
+        Will combine the data files for the specified directory and generate
+        a XML report keeping the data files in place.
+        """
+        repo_name = 'test/repository'
+        commit = self.mkGitRepo(repo_name)
+
+        sut = ReportGenerator()
+
+        # So we don't try to pull from origin
+        sut.github_base_url = None
+
+        sut.generate_report(
+            self.tempdir,
+            repo_name,
+            commit,
+            'master',
+            '42',
+            )
+
+        commit_path = osp.join(self.tempdir, repo_name, 'commit', commit)
+        self.assertTrue(osp.exists(osp.join(commit_path, 'coverage.xml')))
