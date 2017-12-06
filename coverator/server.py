@@ -6,6 +6,7 @@ from git import Repo
 from github import Github
 from multiprocessing import Queue, Process
 from SimpleHTTPServer import SimpleHTTPRequestHandler
+from subprocess import call
 
 import argparse
 import cgi
@@ -233,7 +234,7 @@ class ReportGenerator(Process):
         # status_total_msg = 'Waiting for status to be reported'
         # if coverage_total is not None:
         #     status_total = 'failure'
-        #     status_diff_msg = 'Coverage is %f%% <%f%%>' % (coverage_total, -10)
+        #     status_total_msg = 'Coverage is %.2f%%' % coverage_total
         # github_commit.create_status(
         #         status_total,
         #         '%s/%s/commit/%s' % (
@@ -257,25 +258,22 @@ class ReportGenerator(Process):
                 'coverator/project/diff')
 
     def publishToCodecov(self, token, commit, branch, pr):
-        from pkg_resources import load_entry_point as lep
-        codecov_main = lep('codecov', 'console_scripts', 'codecov')
-
-        sys.argv = [
-            'codecov',
-            '--build', 'coverator',
-            '--file', '../commit/%s/coverage.xml' % commit,
-            '-t', token,
-            ]
+        """
+        Publish a XML report to codecov.io.
+        """
+        args = ['codecov', '--build', 'coverator',
+                '--file', '../commit/%s/coverage.xml' % commit,
+                '-t', token]
 
         if branch:
             # We know the branch name from the env.
-            sys.argv.extend(['--branch', branch])
+            args.extend(['--branch', branch])
 
         if pr:
             # We are publishing for a PR.
-            sys.argv.extend(['--pr', pr])
+            args.extend(['--pr', pr])
 
-        codecov_main()
+        call(args)
 
     def run(self):
         """
@@ -320,7 +318,6 @@ class ReportGenerator(Process):
                     combined_coverage_file = os.path.join(
                         path, COVERAGE_DATA_PREFIX[:-1])
 
-                    from subprocess import call
                     env = os.environ.copy()
                     env['COVERAGE_FILE'] = combined_coverage_file
 
@@ -328,36 +325,41 @@ class ReportGenerator(Process):
                     # We call coverage combine three times, one for non-windows
                     # generated files, one for windows generated files and
                     # one for combine the two calls.
-                    self.log_message('Combining non-windows files.')
                     args = ['coverage', 'combine']
-                    call(args + [
-                        f for f in glob.glob('%s/*' % tempdir)
-                        if 'win' not in f
-                        ], env=env)
+                    non_win_files = [
+                            f for f in glob.glob('%s/*' % tempdir)
+                            if 'win' not in f]
+                    if non_win_files:
+                        self.log_message('Combining non-windows files.')
+                        call(args + non_win_files, env=env)
 
-                    self.log_message('Combining windows files.')
-                    env['COVERAGE_FILE'] = '%s.win' % combined_coverage_file
-                    call(args + [
-                        f for f in glob.glob('%s/*win*' % tempdir)
-                        ], env=env)
+                    win_files = glob.glob('%s/*win*' % tempdir)
+                    if win_files:
+                        env['COVERAGE_FILE'] = '%s.win' % (
+                            combined_coverage_file)
+                        self.log_message('Combining windows files.')
+                        call(args + win_files, env=env)
 
-                    # Manually replace the windows path for linux path
-                    windows_file = open('%s.win' % combined_coverage_file)
-                    content = windows_file.read()
-                    windows_file.close()
-                    new_content = content.replace('\\\\', '/')
-                    windows_file = open('%s.win' % combined_coverage_file, 'w')
-                    windows_file.write(new_content)
-                    windows_file.close()
+                        # Manually replace the windows path for linux path
+                        windows_file = open(
+                            '%s.win' % combined_coverage_file)
+                        content = windows_file.read()
+                        windows_file.close()
+                        new_content = content.replace('\\\\', '/')
+                        windows_file = open(
+                            '%s.win' % combined_coverage_file, 'w')
+                        windows_file.write(new_content)
+                        windows_file.close()
 
-                    self.log_message('Merging windows and non-windows files.')
-                    env['COVERAGE_FILE'] = combined_coverage_file
-                    call([
-                        'coverage',
-                        'combine',
-                        '-a',
-                        '%s.win' % combined_coverage_file
-                        ], env=env)
+                        self.log_message(
+                            'Merging windows and non-windows files.')
+                        env['COVERAGE_FILE'] = combined_coverage_file
+                        call([
+                            'coverage',
+                            'combine',
+                            '-a',
+                            '%s.win' % combined_coverage_file
+                            ], env=env)
 
                     shutil.rmtree(tempdir)
 
@@ -376,7 +378,7 @@ class ReportGenerator(Process):
                         'XML file created at %s',
                         os.path.join(path, 'coverage.xml'))
 
-                    # HTML and Diff html reports are commented since we are
+                    # HTML reports are commented since we are
                     # still relying on codecov.io for it.
                     # coverage_total = c.html_report(directory=path)
 
@@ -390,7 +392,8 @@ class ReportGenerator(Process):
                             [os.path.join(path, 'coverage.xml')],
                             'master',
                             os.path.join(path, 'diff-cover.html'))
-                        self.log_message('Diff-cover generated, now notifying github.')
+                        self.log_message(
+                            'Diff-cover generated, now notifying github.')
                         self.notifyGithub(
                             repo, commit, None, coverage_diff)
 
