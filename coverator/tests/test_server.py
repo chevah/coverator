@@ -290,10 +290,7 @@ class TestReportGenerator(TestCase):
         self.tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
 
     def tearDown(self):
-        try:
-            shutil.rmtree(self.tempdir)
-        except OSError:
-            pass
+        shutil.rmtree(self.tempdir)
 
     def mkGitRepo(self, repo_name):
         """
@@ -329,6 +326,9 @@ class TestReportGenerator(TestCase):
         shutil.copy(
             osp.join(self.datadir, 'coverage_1'),
             osp.join(commit_path, 'coverage.data.slave-1'))
+        shutil.copy(
+            osp.join(self.datadir, 'coverage_1_win'),
+            osp.join(commit_path, 'coverage.data.slave-win-1'))
         shutil.copy(
             osp.join(self.datadir, 'coverage_2'),
             osp.join(commit_path, 'coverage.data.slave-2'))
