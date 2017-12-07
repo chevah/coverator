@@ -6,10 +6,10 @@ from git import Repo
 from github import Github
 from multiprocessing import Queue, Process
 from SimpleHTTPServer import SimpleHTTPRequestHandler
+from subprocess import call
 
 import argparse
 import cgi
-# import coverage
 import glob
 import os
 import posixpath
@@ -48,7 +48,7 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
                      })
 
         if 'file' in form:
-            if not os.path.exists(self.PATH):  # pragma: no cover
+            if not os.path.exists(self.PATH):
                 self.log_message('Creating dir: %s.', self.PATH)
                 os.mkdir(self.PATH)
 
@@ -137,7 +137,6 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
 
         # We use the configurable PATH variable instead of os.getcwd()
         path = self.PATH
-
         for word in words:
             if os.path.dirname(word) or word in (os.curdir, os.pardir):
                 # Ignore components that are not a simple file/directory name
@@ -162,13 +161,18 @@ class ReportGenerator(Process):
         self.url = url
         self.codecov_tokens = codecov_tokens
         self.github = None
-        self.github_token = None
 
         if github_token:
             self.github_base_url = 'https://%s@github.com' % github_token
             self.github = Github(github_token)
 
         super(ReportGenerator, self).__init__()
+
+    weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    monthname = [None,
+                 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
     def log_message(self, format, *args):
         sys.stderr.write(
@@ -183,12 +187,6 @@ class ReportGenerator(Process):
         s = "%02d/%3s/%04d %02d:%02d:%02d" % (
                 day, self.monthname[month], year, hh, mm, ss)
         return s
-
-    weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-    monthname = [None,
-                 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
     def cloneGitRepo(self, repo, path, commit):
         """
@@ -233,7 +231,7 @@ class ReportGenerator(Process):
         # status_total_msg = 'Waiting for status to be reported'
         # if coverage_total is not None:
         #     status_total = 'failure'
-        #     status_diff_msg = 'Coverage is %f%% <%f%%>' % (coverage_total, -10)
+        #     status_total_msg = 'Coverage is %.2f%%' % coverage_total
         # github_commit.create_status(
         #         status_total,
         #         '%s/%s/commit/%s' % (
@@ -257,29 +255,143 @@ class ReportGenerator(Process):
                 'coverator/project/diff')
 
     def publishToCodecov(self, token, commit, branch, pr):
-        from pkg_resources import load_entry_point as lep
-        codecov_main = lep('codecov', 'console_scripts', 'codecov')
-
-        sys.argv = [
-            'codecov',
-            '--build', 'coverator',
-            '--file', '../commit/%s/coverage.xml' % commit,
-            '-t', token,
-            ]
+        """
+        Publish a XML report to codecov.io.
+        """
+        args = ['codecov', '--build', 'coverator',
+                '--file', '../commit/%s/coverage.xml' % commit,
+                '-t', token]
 
         if branch:
             # We know the branch name from the env.
-            sys.argv.extend(['--branch', branch])
+            args.extend(['--branch', branch])
 
         if pr:
             # We are publishing for a PR.
-            sys.argv.extend(['--pr', pr])
+            args.extend(['--pr', pr])
 
-        codecov_main()
+        call(args)
+
+    def generate_report(self, base_path, repository, commit, branch, pr):
+        """
+        Combine coverage data files, generate XML report and send to
+        codecov.io.
+        """
+
+        # The path to save the reports
+        path = os.path.join(base_path, repository, 'commit', commit)
+        git_repo_path = os.path.join(base_path, repository, 'git-repo')
+
+        # This check is here to help with testing
+        if self.github_base_url is not None:  # pragma: no cover
+            # self.notifyGithub(repository, commit)
+            self.cloneGitRepo(repository, git_repo_path, commit)
+
+        # Coverage.py will delete the coverage data files when
+        # combining them. We don't want that, so let's copy to a
+        # temporary dir first.
+        tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
+        coverage_files = glob.glob(
+            os.path.join(path, '%s*' % COVERAGE_DATA_PREFIX))
+        self.log_message('Copying files to %s', tempdir)
+        for coverage_file in coverage_files:
+            shutil.copy(coverage_file, tempdir)
+
+        # Save actual path and move to the cloned repository
+        old_path = os.getcwd()
+        os.chdir(os.path.join(git_repo_path))
+
+        try:
+            self.log_message('Starting to combine coverage files...')
+            combined_coverage_file = os.path.join(
+                path, COVERAGE_DATA_PREFIX[:-1])
+            env = os.environ.copy()
+            env['COVERAGE_FILE'] = combined_coverage_file
+
+            # FIXME:4516:
+            # We call coverage combine three times, one for non-windows
+            # generated files, one for windows generated files and
+            # one for combine the two calls.
+            args = ['coverage', 'combine']
+            non_win_files = [
+                    f for f in glob.glob('%s/*' % tempdir)
+                    if 'win' not in f]
+            if non_win_files:
+                self.log_message('Combining non-windows files.')
+                call(args + non_win_files, env=env)
+
+            win_files = glob.glob('%s/*win*' % tempdir)
+            if win_files:
+                env['COVERAGE_FILE'] = '%s.win' % (
+                    combined_coverage_file)
+                self.log_message('Combining windows files.')
+                call(args + win_files, env=env)
+
+                # Manually replace the windows path for linux path
+                windows_file = open(
+                    '%s.win' % combined_coverage_file)
+                content = windows_file.read()
+                windows_file.close()
+                new_content = content.replace('\\\\', '/')
+                windows_file = open(
+                    '%s.win' % combined_coverage_file, 'w')
+                windows_file.write(new_content)
+                windows_file.close()
+
+                self.log_message(
+                    'Merging windows and non-windows files.')
+                env['COVERAGE_FILE'] = combined_coverage_file
+                call([
+                    'coverage',
+                    'combine',
+                    '-a',
+                    '%s.win' % combined_coverage_file
+                    ], env=env)
+
+            shutil.rmtree(tempdir)
+
+            self.log_message('Files combined, generating xml report.')
+            call([
+                'coverage',
+                'xml',
+                '-o',
+                os.path.join(path, 'coverage.xml'),
+                ], env=env)
+
+            # Delete the data file after the xml file is generated.
+            os.remove(combined_coverage_file)
+
+            self.log_message(
+                'XML file created at %s',
+                os.path.join(path, 'coverage.xml'))
+
+            if self.github is not None:  # pragma: no cover
+                # Generate the diff-coverage report.
+                from diff_cover.tool import generate_coverage_report
+                from diff_cover.git_path import GitPathTool
+                GitPathTool.set_cwd(os.getcwd())
+                self.log_message('Generating diff-cover')
+                coverage_diff = generate_coverage_report(
+                    [os.path.join(path, 'coverage.xml')],
+                    'master',
+                    os.path.join(path, 'diff-cover.html'))
+                self.log_message(
+                    'Diff-cover generated, now notifying github.')
+                self.notifyGithub(
+                    repository, commit, None, coverage_diff)
+
+                codecov_token = self.codecov_tokens.get(repository, None)
+                if codecov_token:
+                    self.log_message('Publishing to codecov.io')
+                    self.publishToCodecov(
+                        codecov_token, commit, branch, pr)
+
+        finally:
+            os.chdir(old_path)
 
     def run(self):
         """
-        Combine coverage data files and generate HTML reports.
+        Main process loop.
         """
         while True:
             try:
@@ -289,119 +401,8 @@ class ReportGenerator(Process):
                     self.log_message('Nothing to consume, exiting process.')
                     break
                 self.log_message('New value from queue: %s', value)
-                root, repo, commit, branch, pr = value
-
-                # The path to save the reports
-                path = os.path.join(root, repo, 'commit', commit)
-                git_repo_path = os.path.join(root, repo, 'git-repo')
-
-                # This check is here to help with testing
-                if self.github_base_url is not None:  # pragma: no cover
-                    # self.notifyGithub(repo, commit)
-                    self.cloneGitRepo(repo, git_repo_path, commit)
-
-                old_path = os.getcwd()
-
-                try:
-                    # The coverage API will delete the coverage data files when
-                    # combining them. We don't want that, so let's copy to a
-                    # temporary dir first.
-                    tempdir = tempfile.mkdtemp(dir=tempfile.gettempdir())
-                    coverage_files = glob.glob(
-                        os.path.join(path, '%s*' % COVERAGE_DATA_PREFIX))
-                    self.log_message('Copying files to %s', tempdir)
-                    for coverage_file in coverage_files:
-                        shutil.copy(coverage_file, tempdir)
-
-                    os.chdir(os.path.join(git_repo_path))
-
-                    # Move to the cloned repo and prepare for the reports
-                    self.log_message('Starting to combine coverage files...')
-                    combined_coverage_file = os.path.join(
-                        path, COVERAGE_DATA_PREFIX[:-1])
-
-                    from subprocess import call
-                    env = os.environ.copy()
-                    env['COVERAGE_FILE'] = combined_coverage_file
-
-                    # FIXME:4516:
-                    # We call coverage combine three times, one for non-windows
-                    # generated files, one for windows generated files and
-                    # one for combine the two calls.
-                    self.log_message('Combining non-windows files.')
-                    args = ['coverage', 'combine']
-                    call(args + [
-                        f for f in glob.glob('%s/*' % tempdir)
-                        if 'win' not in f
-                        ], env=env)
-
-                    self.log_message('Combining windows files.')
-                    env['COVERAGE_FILE'] = '%s.win' % combined_coverage_file
-                    call(args + [
-                        f for f in glob.glob('%s/*win*' % tempdir)
-                        ], env=env)
-
-                    # Manually replace the windows path for linux path
-                    windows_file = open('%s.win' % combined_coverage_file)
-                    content = windows_file.read()
-                    windows_file.close()
-                    new_content = content.replace('\\\\', '/')
-                    windows_file = open('%s.win' % combined_coverage_file, 'w')
-                    windows_file.write(new_content)
-                    windows_file.close()
-
-                    self.log_message('Merging windows and non-windows files.')
-                    env['COVERAGE_FILE'] = combined_coverage_file
-                    call([
-                        'coverage',
-                        'combine',
-                        '-a',
-                        '%s.win' % combined_coverage_file
-                        ], env=env)
-
-                    shutil.rmtree(tempdir)
-
-                    self.log_message('Files combined, generating xml report.')
-                    call([
-                        'coverage',
-                        'xml',
-                        '-o',
-                        os.path.join(path, 'coverage.xml'),
-                        ], env=env)
-
-                    # Delete the data file after the xml file is generated.
-                    os.remove(combined_coverage_file)
-
-                    self.log_message(
-                        'XML file created at %s',
-                        os.path.join(path, 'coverage.xml'))
-
-                    # HTML and Diff html reports are commented since we are
-                    # still relying on codecov.io for it.
-                    # coverage_total = c.html_report(directory=path)
-
-                    if self.github is not None:  # pragma: no cover
-                        # Generate the diff-coverage report.
-                        from diff_cover.tool import generate_coverage_report
-                        from diff_cover.git_path import GitPathTool
-                        GitPathTool.set_cwd(os.getcwd())
-                        self.log_message('Generating diff-cover')
-                        coverage_diff = generate_coverage_report(
-                            [os.path.join(path, 'coverage.xml')],
-                            'master',
-                            os.path.join(path, 'diff-cover.html'))
-                        self.log_message('Diff-cover generated, now notifying github.')
-                        self.notifyGithub(
-                            repo, commit, None, coverage_diff)
-
-                        codecov_token = self.codecov_tokens.get(repo, None)
-                        if codecov_token:
-                            self.log_message('Publishing to codecov.io')
-                            self.publishToCodecov(
-                                codecov_token, commit, branch, pr)
-
-                finally:
-                    os.chdir(old_path)
+                base_path, repo, commit, branch, pr = value
+                self.generate_report(base_path, repo, commit, branch, pr)
             except KeyboardInterrupt:
                 self.log_message('Exiting consumer process.')
                 break
