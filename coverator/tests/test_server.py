@@ -262,7 +262,7 @@ class TestCoveratorHandler(BaseTestCase):
             'test/repository',
             '0f3adff9d8f6a72c919822b8cde073a9e20505e0',
             'test-branch',
-            '42'), value)
+            '42'), value[:-1])
 
     def test_translate_path(self):
         """
@@ -357,7 +357,7 @@ class TestReportGenerator(TestCase):
         self.assertEquals({}, sut.codecov_tokens)
         self.assertEquals('http://testurl/', sut.url)
 
-    def test_generate_report(self):
+    def test_generateReport(self):
         """
         Will combine the data files for the specified directory and generate
         a XML report keeping the data files in place.
@@ -370,7 +370,7 @@ class TestReportGenerator(TestCase):
         # So we don't try to pull from origin
         sut.github_base_url = None
 
-        sut.generate_report(
+        sut.generateReport(
             self.tempdir,
             repo_name,
             commit,
