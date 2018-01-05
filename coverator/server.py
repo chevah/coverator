@@ -412,8 +412,8 @@ class ReportGenerator(Process):
                     self._stop = True
                 else:
                     self.log_message('New value from queue: %s', value)
-                    commit_sha = value[2]
-                    self._to_be_generated[commit_sha] = value
+                    key = "%s:%s" % (value[1], value[2])
+                    self._to_be_generated[key] = value
                     wait = 1
             except Empty:
                 self.log_message(
