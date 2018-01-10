@@ -4,6 +4,7 @@ from BaseHTTPServer import HTTPServer
 from ConfigParser import SafeConfigParser
 from git import Repo
 from github import Github
+from Queue import Empty
 from multiprocessing import Queue, Process
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 from subprocess import call
@@ -102,12 +103,15 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
 
             coverage_files = glob.glob(os.path.join(
                 path, '%s*' % COVERAGE_DATA_PREFIX))
+
             if len(coverage_files) > self.MINIMUM_FILES:
-                self.log_message('Adding %s to the queue', commit)
+                now = time.time()
+                self.log_message(
+                    'Adding (%s, %f) to the queue' % (commit, now))
                 branch = form.getvalue('branch', None)
                 pr = form.getvalue('pr', None)
                 self.report_generator.queue.put(
-                    (self.PATH, repo, commit, branch, pr))
+                    (self.PATH, repo, commit, branch, pr, now))
 
         self.log_message('Writing response.')
         response = '{success:true}'
@@ -156,8 +160,12 @@ class ReportGenerator(Process):
     github_base_url = 'https://github.com'
 
     def __init__(
-            self, github_token=None, url=None, codecov_tokens={}):
+            self, github_token=None, url=None, codecov_tokens={},
+            time_to_wait=200):
         self.queue = Queue()
+        self._to_be_generated = {}
+        self._stop = False
+        self._time_to_wait = time_to_wait
         self.url = url
         self.codecov_tokens = codecov_tokens
         self.github = None
@@ -272,7 +280,7 @@ class ReportGenerator(Process):
 
         call(args)
 
-    def generate_report(self, base_path, repository, commit, branch, pr):
+    def generateReport(self, base_path, repository, commit, branch, pr):
         """
         Combine coverage data files, generate XML report and send to
         codecov.io.
@@ -393,16 +401,48 @@ class ReportGenerator(Process):
         """
         Main process loop.
         """
+        wait = 100000
+
         while True:
             try:
-                value = self.queue.get()
+                value = self.queue.get(True, wait)
+
                 if value is None:
-                    # Means there is nothing else to consume.
-                    self.log_message('Nothing to consume, exiting process.')
-                    break
-                self.log_message('New value from queue: %s', value)
-                base_path, repo, commit, branch, pr = value
-                self.generate_report(base_path, repo, commit, branch, pr)
+                    self.log_message('Received signal to stop.')
+                    self._stop = True
+                else:
+                    self.log_message('New value from queue: %s', value)
+                    key = "%s:%s" % (value[1], value[2])
+                    self._to_be_generated[key] = value
+                    wait = 1
+            except Empty:
+                self.log_message(
+                    'Queue is empty, check reports to be generated: %s' %
+                    self._to_be_generated)
+                if len(self._to_be_generated) == 0:
+                    if self._stop:
+                        # Means there is nothing else to consume.
+                        self.log_message(
+                            'Nothing to consume, exiting process.')
+                        break
+                    wait = 100000
+                    continue
+
+                first_in_queue = min(
+                    self._to_be_generated.items(), key=lambda v: v[1][-1])
+                when = first_in_queue[1][-1] + self._time_to_wait
+
+                if time.time() >= when:
+                    data = self._to_be_generated.pop(
+                        first_in_queue[0])
+
+                    self.log_message('Ready to generate report for: %s', data)
+                    base_path, repo, commit, branch, pr, tstamp = data
+                    self.generateReport(base_path, repo, commit, branch, pr)
+                    wait = 1
+                else:
+                    wait = when - time.time()
+                    self.log_message('Wait time for next report: %f' % wait)
             except KeyboardInterrupt:
                 self.log_message('Exiting consumer process.')
                 break
@@ -443,8 +483,11 @@ def main():  # pragma: no cover
     CoveratorHandler.MINIMUM_FILES = config.getint(
         'server', 'min_buildslaves')
 
+    time_to_wait = config.getint(
+        'server', 'seconds_before_generate_report')
+
     CoveratorHandler.report_generator = ReportGenerator(
-        github_token, coverator_url, codecov_tokens)
+        github_token, coverator_url, codecov_tokens, time_to_wait)
     CoveratorHandler.report_generator.start()
 
     server = HTTPServer(
