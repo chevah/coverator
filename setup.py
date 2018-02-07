@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 
 
 class PublishCommand(Command):
@@ -40,7 +40,7 @@ distribution = setup(
     url='http://www.chevah.com',
     packages=find_packages('.'),
     install_requires=[
-        'coverage==4.4.1',
+        'coverage==4.5',
         'requests==2.17.3',
         'codecov==2.0.3',
         'diff-cover==0.9.11',

@@ -316,45 +316,9 @@ class ReportGenerator(Process):
             env = os.environ.copy()
             env['COVERAGE_FILE'] = combined_coverage_file
 
-            # FIXME:4516:
-            # We call coverage combine three times, one for non-windows
-            # generated files, one for windows generated files and
-            # one for combine the two calls.
             args = ['coverage', 'combine']
-            non_win_files = [
-                    f for f in glob.glob('%s/*' % tempdir)
-                    if 'win' not in f]
-            if non_win_files:
-                self.log_message('Combining non-windows files.')
-                call(args + non_win_files, env=env)
-
-            win_files = glob.glob('%s/*win*' % tempdir)
-            if win_files:
-                env['COVERAGE_FILE'] = '%s.win' % (
-                    combined_coverage_file)
-                self.log_message('Combining windows files.')
-                call(args + win_files, env=env)
-
-                # Manually replace the windows path for linux path
-                windows_file = open(
-                    '%s.win' % combined_coverage_file)
-                content = windows_file.read()
-                windows_file.close()
-                new_content = content.replace('\\\\', '/')
-                windows_file = open(
-                    '%s.win' % combined_coverage_file, 'w')
-                windows_file.write(new_content)
-                windows_file.close()
-
-                self.log_message(
-                    'Merging windows and non-windows files.')
-                env['COVERAGE_FILE'] = combined_coverage_file
-                call([
-                    'coverage',
-                    'combine',
-                    '-a',
-                    '%s.win' % combined_coverage_file
-                    ], env=env)
+            files = glob.glob('%s/*' % tempdir)
+            call(args + files, env=env)
 
             shutil.rmtree(tempdir)
 
