@@ -262,12 +262,12 @@ class ReportGenerator(Process):
                 status_diff_msg,
                 'coverator/project/diff')
 
-    def publishToCodecov(self, token, commit, branch, pr):
+    def publishToCodecov(self, token, commit_path, branch, pr):
         """
         Publish a XML report to codecov.io.
         """
         args = ['codecov', '--build', 'coverator',
-                '--file', '../commit/%s/coverage.xml' % commit,
+                '--file', os.path.join(commit_path, 'coverage.xml'),
                 '-t', token]
 
         if branch:
@@ -316,9 +316,45 @@ class ReportGenerator(Process):
             env = os.environ.copy()
             env['COVERAGE_FILE'] = combined_coverage_file
 
+            # FIXME:4516:
+            # We call coverage combine three times, one for non-windows
+            # generated files, one for windows generated files and
+            # one for combine the two calls.
             args = ['coverage', 'combine']
-            files = glob.glob('%s/*' % tempdir)
-            call(args + files, env=env)
+            non_win_files = [
+                    f for f in glob.glob('%s/*' % tempdir)
+                    if 'win' not in f]
+            if non_win_files:
+                self.log_message('Combining non-windows files.')
+                call(args + non_win_files, env=env)
+
+            win_files = glob.glob('%s/*win*' % tempdir)
+            if win_files:
+                env['COVERAGE_FILE'] = '%s.win' % (
+                    combined_coverage_file)
+                self.log_message('Combining windows files.')
+                call(args + win_files, env=env)
+
+                # Manually replace the windows path for linux path
+                windows_file = open(
+                    '%s.win' % combined_coverage_file)
+                content = windows_file.read()
+                windows_file.close()
+                new_content = content.replace('\\\\', '/')
+                windows_file = open(
+                    '%s.win' % combined_coverage_file, 'w')
+                windows_file.write(new_content)
+                windows_file.close()
+
+                self.log_message(
+                    'Merging windows and non-windows files.')
+                env['COVERAGE_FILE'] = combined_coverage_file
+                call([
+                    'coverage',
+                    'combine',
+                    '-a',
+                    '%s.win' % combined_coverage_file
+                    ], env=env)
 
             shutil.rmtree(tempdir)
 
@@ -356,7 +392,7 @@ class ReportGenerator(Process):
                 if codecov_token:
                     self.log_message('Publishing to codecov.io')
                     self.publishToCodecov(
-                        codecov_token, commit, branch, pr)
+                        codecov_token, path, branch, pr)
 
         finally:
             os.chdir(old_path)
@@ -369,44 +405,45 @@ class ReportGenerator(Process):
 
         while True:
             try:
-                value = self.queue.get(True, wait)
+                try:
+                    value = self.queue.get(True, wait)
 
-                if value is None:
-                    self.log_message('Received signal to stop.')
-                    self._stop = True
-                else:
-                    self.log_message('New value from queue: %s', value)
-                    key = "%s:%s" % (value[1], value[2])
-                    self._to_be_generated[key] = value
-                    wait = 1
-            except Empty:
-                self.log_message(
-                    'Queue is empty, check reports to be generated: %s' %
-                    self._to_be_generated)
-                if len(self._to_be_generated) == 0:
-                    if self._stop:
-                        # Means there is nothing else to consume.
-                        self.log_message(
-                            'Nothing to consume, exiting process.')
-                        break
-                    wait = 100000
-                    continue
+                    if value is None:
+                        self.log_message('Received signal to stop.')
+                        self._stop = True
+                    else:
+                        self.log_message('New value from queue: %s', value)
+                        key = "%s:%s" % (value[1], value[2])
+                        self._to_be_generated[key] = value
+                        wait = 1
+                except Empty:
+                    self.log_message(
+                        'Queue is empty, check reports to be generated: %s' %
+                        self._to_be_generated)
+                    if len(self._to_be_generated) == 0:
+                        if self._stop:
+                            # Means there is nothing else to consume.
+                            self.log_message(
+                                'Nothing to consume, exiting process.')
+                            break
+                        wait = 100000
+                        continue
 
-                first_in_queue = min(
-                    self._to_be_generated.items(), key=lambda v: v[1][-1])
-                when = first_in_queue[1][-1] + self._time_to_wait
+                    first_in_queue = min(
+                        self._to_be_generated.items(), key=lambda v: v[1][-1])
+                    when = first_in_queue[1][-1] + self._time_to_wait
 
-                if time.time() >= when:
-                    data = self._to_be_generated.pop(
-                        first_in_queue[0])
+                    if time.time() >= when:
+                        data = self._to_be_generated.pop(
+                            first_in_queue[0])
 
-                    self.log_message('Ready to generate report for: %s', data)
-                    base_path, repo, commit, branch, pr, tstamp = data
-                    self.generateReport(base_path, repo, commit, branch, pr)
-                    wait = 1
-                else:
-                    wait = when - time.time()
-                    self.log_message('Wait time for next report: %f' % wait)
+                        self.log_message('Ready to generate report for: %s', data)
+                        base_path, repo, commit, branch, pr, tstamp = data
+                        self.generateReport(base_path, repo, commit, branch, pr)
+                        wait = 1
+                    else:
+                        wait = when - time.time()
+                        self.log_message('Wait time for next report: %f' % wait)
             except KeyboardInterrupt:
                 self.log_message('Exiting consumer process.')
                 break
