@@ -1,0 +1,9 @@
+{
+  "scopes": [
+    "repo:status"
+  ],
+  "note": "coverator commit status",
+  "fingerprint": "request-1",
+  "client_id": "ADD-YOUR-APP-ID",
+  "client_secret": "ADD-YOUR-APP-ID"
+}

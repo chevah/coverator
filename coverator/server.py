@@ -80,7 +80,7 @@ class CoveratorHandler(SimpleHTTPRequestHandler):
             self.log_message('Writing coverage file: (%s,%s)', build, commit)
 
             f = open(os.path.join(path, '%s%s' % (
-                    COVERAGE_DATA_PREFIX, build)), 'wb')
+                COVERAGE_DATA_PREFIX, build)), 'wb')
             f.write(coverage_file.read())
             f.close()
 
@@ -232,8 +232,7 @@ class ReportGenerator(Process):
         repo_url = repo
         if repo_url.endswith('.git'):
             repo_url = repo_url[:-4]
-        github_commit = self.github.get_repo(
-                repo_url).get_commit(commit)
+        github_commit = self.github.get_repo(repo_url).get_commit(commit)
 
         # status_total = 'pending'
         # status_total_msg = 'Waiting for status to be reported'
@@ -256,11 +255,11 @@ class ReportGenerator(Process):
                 status_diff = 'success'
 
         github_commit.create_status(
-                status_diff,
-                '%s/%s/commit/%s/diff-cover.html' % (
-                    self.url, repo, commit),
-                status_diff_msg,
-                'coverator/project/diff')
+            status_diff,
+            '%s/%s/commit/%s/diff-cover.html' % (
+                self.url, repo, commit),
+            status_diff_msg,
+            'coverator/project/diff')
 
     def publishToCodecov(self, token, commit_path, branch, pr):
         """
@@ -336,13 +335,11 @@ class ReportGenerator(Process):
                 call(args + win_files, env=env)
 
                 # Manually replace the windows path for linux path
-                windows_file = open(
-                    '%s.win' % combined_coverage_file)
+                windows_file = open('%s.win' % combined_coverage_file)
                 content = windows_file.read()
                 windows_file.close()
                 new_content = content.replace('\\\\', '/')
-                windows_file = open(
-                    '%s.win' % combined_coverage_file, 'w')
+                windows_file = open('%s.win' % combined_coverage_file, 'w')
                 windows_file.write(new_content)
                 windows_file.close()
 
@@ -401,49 +398,9 @@ class ReportGenerator(Process):
         """
         Main process loop.
         """
-        wait = 100000
-
         while True:
             try:
-                try:
-                    value = self.queue.get(True, wait)
-
-                    if value is None:
-                        self.log_message('Received signal to stop.')
-                        self._stop = True
-                    else:
-                        self.log_message('New value from queue: %s', value)
-                        key = "%s:%s" % (value[1], value[2])
-                        self._to_be_generated[key] = value
-                        wait = 1
-                except Empty:
-                    self.log_message(
-                        'Queue is empty, check reports to be generated: %s' %
-                        self._to_be_generated)
-                    if len(self._to_be_generated) == 0:
-                        if self._stop:
-                            # Means there is nothing else to consume.
-                            self.log_message(
-                                'Nothing to consume, exiting process.')
-                            break
-                        wait = 100000
-                        continue
-
-                    first_in_queue = min(
-                        self._to_be_generated.items(), key=lambda v: v[1][-1])
-                    when = first_in_queue[1][-1] + self._time_to_wait
-
-                    if time.time() >= when:
-                        data = self._to_be_generated.pop(
-                            first_in_queue[0])
-
-                        self.log_message('Ready to generate report for: %s', data)
-                        base_path, repo, commit, branch, pr, tstamp = data
-                        self.generateReport(base_path, repo, commit, branch, pr)
-                        wait = 1
-                    else:
-                        wait = when - time.time()
-                        self.log_message('Wait time for next report: %f' % wait)
+                self._processQueue()
             except KeyboardInterrupt:
                 self.log_message('Exiting consumer process.')
                 break
@@ -451,6 +408,51 @@ class ReportGenerator(Process):
                 print('Exception in consumer process:', sys.exc_info())
             finally:
                 self.log_message('Queue task done.')
+
+    def _processQueue(self):
+        """
+        Execute tasks from the queue.
+        """
+        wait = 100000
+        try:
+            value = self.queue.get(True, wait)
+
+            if value is None:
+                self.log_message('Received signal to stop.')
+                self._stop = True
+            else:
+                self.log_message('New value from queue: %s', value)
+                key = "%s:%s" % (value[1], value[2])
+                self._to_be_generated[key] = value
+                wait = 1
+        except Empty:
+            self.log_message(
+                'Queue is empty, check reports to be generated: %s' %
+                self._to_be_generated)
+            if len(self._to_be_generated) == 0:
+                if self._stop:
+                    # Means there is nothing else to consume.
+                    self.log_message(
+                        'Nothing to consume, exiting process.')
+                    raise KeyboardInterrupt()
+                wait = 100000
+                return
+
+            first_in_queue = min(
+                self._to_be_generated.items(), key=lambda v: v[1][-1])
+            when = first_in_queue[1][-1] + self._time_to_wait
+
+            if time.time() >= when:
+                data = self._to_be_generated.pop(
+                    first_in_queue[0])
+
+                self.log_message('Ready to generate report for: %s', data)
+                base_path, repo, commit, branch, pr, tstamp = data
+                self.generateReport(base_path, repo, commit, branch, pr)
+                wait = 1
+            else:
+                wait = when - time.time()
+                self.log_message('Wait time for next report: %f' % wait)
 
 
 def main():  # pragma: no cover

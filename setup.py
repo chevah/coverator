@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.1.3'
+VERSION = '0.1.4'
 
 
 class PublishCommand(Command):
@@ -9,7 +9,7 @@ class PublishCommand(Command):
     Publish the source distribution to private Chevah PyPi server.
     """
 
-    description = "copy distributable to Chevah cache folder"
+    description = "Upload to Chevah private repo"
     user_options = []
 
     def initialize_options(self):
@@ -21,7 +21,7 @@ class PublishCommand(Command):
     def run(self):
         assert os.getcwd() == self.cwd, (
             'Must be in package root: %s' % self.cwd)
-        self.run_command('sdist')
+        self.run_command('bdist_wheel')
         # Upload package to Chevah PyPi server.
         upload_command = self.distribution.get_command_obj('upload')
         upload_command.repository = u'chevah'
@@ -35,7 +35,9 @@ distribution = setup(
     maintainer_email='adi.roiban@chevah.com',
     license='MIT',
     platforms='any',
-    description="codecov.io like tool for aggregating and publishing coverage reports.",
+    description=(
+        'Tool for aggregating and publishing coverage reports.'
+        ),
     long_description="",
     url='http://www.chevah.com',
     packages=find_packages('.'),

@@ -8,6 +8,7 @@ clean:
 
 env:
 	@if [ ! -d "build" ]; then virtualenv build; fi
+	mkdir build/coverage-data
 
 build: env
 	@build/bin/pip install .
